@@ -1,5 +1,12 @@
-const FREE_MONTHLY_QUOTA = 1000;
-const FREE_PER_MINUTE = 30;
+export type Plan = "free" | "apify";
+
+// Apify usage is metered/billed through Apify's own pay-per-event platform
+// (BIZ-L2b §2), not our Free-tier quota — this cap exists only as a backstop
+// against a bug/runaway loop, not as the real limit on legitimate usage.
+const QUOTAS: Record<Plan, { monthly: number; perMinute: number }> = {
+  free: { monthly: 1000, perMinute: 30 },
+  apify: { monthly: 100_000, perMinute: 120 },
+};
 
 function monthBucket(d = new Date()): string {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -21,7 +28,8 @@ export type QuotaResult =
 // BIZ-L2a §3 ("keys/rate-limit ... in Workers KV") — under heavy concurrent
 // bursts this can slightly overcount past the limit. A Durable Object would
 // give exact counting; not needed at Free-tier launch volume.
-export async function checkAndConsume(kv: KVNamespace, keyHash: string): Promise<QuotaResult> {
+export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: Plan): Promise<QuotaResult> {
+  const { monthly, perMinute } = QUOTAS[plan];
   const monthlyKey = `usage:${keyHash}:${monthBucket()}`;
   const minuteKey = `rl:${keyHash}:${minuteBucket()}`;
 
@@ -29,11 +37,11 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string): Promise
   const monthlyUsed = Number(monthlyRaw ?? 0);
   const minuteUsed = Number(minuteRaw ?? 0);
 
-  if (monthlyUsed >= FREE_MONTHLY_QUOTA) {
-    return { ok: false, reason: "quota", used: monthlyUsed, quota: FREE_MONTHLY_QUOTA };
+  if (monthlyUsed >= monthly) {
+    return { ok: false, reason: "quota", used: monthlyUsed, quota: monthly };
   }
-  if (minuteUsed >= FREE_PER_MINUTE) {
-    return { ok: false, reason: "rate", used: monthlyUsed, quota: FREE_MONTHLY_QUOTA };
+  if (minuteUsed >= perMinute) {
+    return { ok: false, reason: "rate", used: monthlyUsed, quota: monthly };
   }
 
   await Promise.all([
@@ -41,10 +49,10 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string): Promise
     kv.put(minuteKey, String(minuteUsed + 1), { expirationTtl: 70 }),
   ]);
 
-  return { ok: true, used: monthlyUsed + 1, quota: FREE_MONTHLY_QUOTA };
+  return { ok: true, used: monthlyUsed + 1, quota: monthly };
 }
 
-export async function currentUsage(kv: KVNamespace, keyHash: string): Promise<{ used: number; quota: number }> {
+export async function currentUsage(kv: KVNamespace, keyHash: string, plan: Plan): Promise<{ used: number; quota: number }> {
   const raw = await kv.get(`usage:${keyHash}:${monthBucket()}`);
-  return { used: Number(raw ?? 0), quota: FREE_MONTHLY_QUOTA };
+  return { used: Number(raw ?? 0), quota: QUOTAS[plan].monthly };
 }

@@ -21,20 +21,21 @@ export async function requireApiKey(c: Context<{ Bindings: Env; Variables: Varia
     const { body, status, headers } = problem(401, "Unauthorized", "Invalid API key.");
     return c.json(body, status, headers);
   }
+  const record = JSON.parse(recordRaw);
 
-  const result = await checkAndConsume(c.env.API_KEYS, keyHash);
+  const result = await checkAndConsume(c.env.API_KEYS, keyHash, record.plan);
   if (!result.ok) {
     const { body, status, headers } = problem(
       429,
       "Too Many Requests",
       result.reason === "quota"
-        ? "Monthly Free-tier quota exceeded. See pricing at https://cars-data.com/api."
+        ? "Monthly quota exceeded. See pricing at https://cars-data.com/api."
         : "Rate limit exceeded — slow down and retry shortly.",
     );
     return c.json(body, status, headers);
   }
 
   c.set("apiKeyHash", keyHash);
-  c.set("apiKeyRecord", JSON.parse(recordRaw));
+  c.set("apiKeyRecord", record);
   await next();
 }

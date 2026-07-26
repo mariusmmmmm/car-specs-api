@@ -8,7 +8,7 @@ export const usage = new Hono<{ Bindings: Env; Variables: Variables }>();
 usage.get("/", async (c) => {
   const keyHash = c.get("apiKeyHash");
   const record = c.get("apiKeyRecord");
-  const { used, quota } = await currentUsage(c.env.API_KEYS, keyHash);
+  const { used, quota } = await currentUsage(c.env.API_KEYS, keyHash, record.plan);
   return c.json(
     envelope(
       { plan: record.plan, used, quota, resets_at: resetsAt() },

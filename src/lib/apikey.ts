@@ -12,7 +12,7 @@ export function generateApiKey(prefix = "cd_free"): string {
 
 export type KeyRecord = {
   email: string;
-  plan: "free";
+  plan: "free" | "apify";
   tos_version: string;
   tos_accepted_at: string;
   created_at: string;
