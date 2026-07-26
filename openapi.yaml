@@ -20,7 +20,7 @@ info:
     url: https://cars-data.com/api/terms
 servers:
   - url: https://api.cars-data.com/v1
-    description: Production (pending Stage A infra — read-replica + subdomain)
+    description: Production
   - url: http://localhost:8790/v1
     description: Local dev (wrangler dev, Hyperdrive localConnectionString -> cars_v3)
 
