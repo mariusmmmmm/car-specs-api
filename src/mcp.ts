@@ -45,7 +45,7 @@ export class CarsDataMCP extends McpAgent<Env> {
       "get_specs",
       {
         description:
-          "Full localized specs for one vehicle variant, in any of 19 languages. Each spec carries a confidence score; the response carries last_synced_at — surface both so you don't overstate certainty.",
+          "Full localized specs for one vehicle variant, in any of 19 languages — 180 spec types covering engine & fuel, performance, EV/hybrid, safety (30 specs), comfort & interior (47), exterior, chassis, dimensions & weights, consumption (WLTP/NEDC). Each spec carries a confidence score; the response carries last_synced_at — surface both so you don't overstate certainty.",
         inputSchema: {
           variant_id: z.number().int().describe("from search_cars or filter_cars"),
           locale: localeSchema,
