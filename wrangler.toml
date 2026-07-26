@@ -3,24 +3,22 @@ main = "src/index.ts"
 compatibility_date = "2025-01-09"
 compatibility_flags = ["nodejs_compat"]
 
-# Hyperdrive binding — `id` will be the real Hyperdrive config id once the
-# owner provisions the Hetzner read-replica (Stage A #2, production-touching).
-# `localConnectionString` lets `wrangler dev` talk to the local cars_v3
-# Postgres instance instead, so the service is fully runnable before that
-# infra exists.
+# Hyperdrive binding — real config, created 2026-07-26. Points at cars_prod
+# via Cloudflare Tunnel (cloudflared on the primary, no public Postgres
+# exposure) + a dedicated read-only role (cars_api_readonly, CONNECTION
+# LIMIT 10) protected by Cloudflare Access (service token).
+# `localConnectionString` still lets `wrangler dev --local` talk to the
+# local cars_v3 Postgres instead, for fast iteration without hitting prod.
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "TODO_SET_AFTER_READ_REPLICA_PROVISIONED"
+id = "1251f42dbc744e85b46313e3344473a0"
 # password is a dummy value: local pg_hba.conf trusts 127.0.0.1 and ignores it
 localConnectionString = "postgresql://mmalaias-mac:localdev@127.0.0.1:5432/cars_v3"
 
-# API keys + usage/rate-limit counters. `wrangler dev --local` simulates KV
-# in-memory regardless of `id` — no real Cloudflare KV namespace needed yet.
-# Owner creates the real namespace (`wrangler kv namespace create API_KEYS`)
-# when this deploys past local dev.
+# API keys + usage/rate-limit counters. Real namespace, created 2026-07-26.
 [[kv_namespaces]]
 binding = "API_KEYS"
-id = "TODO_SET_AFTER_KV_NAMESPACE_CREATED"
+id = "4bfd13f1489b4e1482f441f4fcf33a3f"
 
 [vars]
 ENVIRONMENT = "development"
