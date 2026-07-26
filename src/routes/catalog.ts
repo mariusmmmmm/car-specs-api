@@ -4,6 +4,7 @@ import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
 import { maxSyncedAt } from "../lib/meta";
+import { listGenerationsForModel } from "../lib/queries";
 
 export const catalog = new Hono<{ Bindings: Env }>();
 
@@ -103,26 +104,7 @@ catalog.get("/models/:id/generations", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
   const modelId = Number(c.req.param("id"));
-  const rows = await sql<
-    {
-      id: number;
-      model_id: number;
-      slug: string;
-      name: string;
-      years_start: number;
-      years_end: number | null;
-      last_synced_at: Date | null;
-    }[]
-  >`
-    SELECT g.public_id::int AS id, m.public_id::int AS model_id, g.canonical_slug AS slug,
-           COALESCE(gt.display_name, g.display_name) AS name,
-           g.years_start, g.years_end, g.last_synced_at
-    FROM generations g
-    JOIN models m ON m.id = g.model_id
-    LEFT JOIN generation_translations gt ON gt.generation_id = g.id AND gt.locale_code = ${locale}
-    WHERE g.is_active AND m.public_id = ${modelId}
-    ORDER BY g.years_start ASC
-  `;
+  const rows = await listGenerationsForModel(sql, locale, modelId);
   if (rows.length === 0) {
     const exists = await sql`SELECT 1 FROM models WHERE public_id = ${modelId} AND is_active LIMIT 1`;
     if (exists.length === 0) {

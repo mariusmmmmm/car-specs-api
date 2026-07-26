@@ -23,3 +23,15 @@ id = "4bfd13f1489b4e1482f441f4fcf33a3f"
 [vars]
 ENVIRONMENT = "development"
 X402_ENABLED = "false"
+
+# Remote MCP server (L2b) — streamable HTTP, backed by a SQLite Durable
+# Object per the Cloudflare Agents SDK's McpAgent pattern. Stateless from our
+# read-model's point of view (each tool call is a plain Hyperdrive read);
+# the DO only holds the MCP session/transport state.
+[[durable_objects.bindings]]
+name = "MCP_OBJECT"
+class_name = "CarsDataMCP"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CarsDataMCP"]
