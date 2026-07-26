@@ -5,8 +5,10 @@ import { envelope } from "../lib/response";
 import { catalog } from "./catalog";
 import { variants } from "./variants";
 import { search } from "./search";
+import { compare } from "./compare";
 import { keys } from "./keys";
 import { usage } from "./usage";
+import { exportRoute } from "./export";
 import { requireApiKey } from "../middleware/auth";
 
 export const v1 = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -30,6 +32,8 @@ protectedV1.use("*", requireApiKey);
 protectedV1.route("/", catalog);
 protectedV1.route("/variants", variants);
 protectedV1.route("/search", search);
+protectedV1.route("/compare", compare);
 protectedV1.route("/usage", usage);
+protectedV1.route("/export", exportRoute);
 
 v1.route("/", protectedV1);

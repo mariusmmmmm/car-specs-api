@@ -3,9 +3,84 @@ import type { Env } from "../types";
 import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
-import { getTranslationCache, localizeSpec, type RawSpecValue } from "../lib/translations";
+import type { RawSpecValue } from "../lib/translations";
+import { localizeVariantSpecs } from "../lib/localize-variant";
+import { maxSyncedAt } from "../lib/meta";
 
 export const variants = new Hono<{ Bindings: Env }>();
+
+variants.get("/", async (c) => {
+  const sql = getDb(c.env);
+  const locale = resolveLocale(c.req.query("locale"));
+  const fuel = c.req.query("fuel");
+  const body = c.req.query("body");
+  const drive = c.req.query("drive");
+  const powerMin = c.req.query("power_min") ? Number(c.req.query("power_min")) : null;
+  const powerMax = c.req.query("power_max") ? Number(c.req.query("power_max")) : null;
+  const priceMax = c.req.query("price_max") ? Number(c.req.query("price_max")) : null;
+  const year = c.req.query("year") ? Number(c.req.query("year")) : null;
+  const ev = c.req.query("ev") === "true";
+  const cursor = c.req.query("cursor") ? Number(c.req.query("cursor")) : 0;
+  const limit = Math.min(Number(c.req.query("limit") ?? 24) || 24, 50);
+
+  const rows = await sql<
+    {
+      variant_id: number;
+      generation_id: number;
+      display_name: string;
+      power_hp: number | null;
+      battery_kwh: string | null;
+      top_speed_kmh: number | null;
+      torque_nm: number | null;
+      accel_0_100_s: string | null;
+      fuel_slug: string | null;
+      body_type_en: string | null;
+      price_new_eur: number | null;
+      last_synced_at: Date | null;
+    }[]
+  >`
+    SELECT v.public_id::int AS variant_id, g.public_id::int AS generation_id,
+           COALESCE(vt.name, v.display_name) AS display_name,
+           v.power_hp, v.battery_kwh, v.top_speed_kmh, v.torque_nm, v.accel_0_100_s,
+           v.fuel_slug, v.body_type_en, v.price_new_eur, v.last_synced_at
+    FROM variants v
+    JOIN generations g ON g.id = v.generation_id
+    LEFT JOIN variant_translations vt ON vt.variant_id = v.id AND vt.locale_code = ${locale}
+    WHERE v.is_active
+      AND v.public_id > ${cursor}
+      AND (${fuel ?? null}::text IS NULL OR v.fuel_slug = ${fuel ?? null})
+      AND (${ev} = false OR v.fuel_slug = 'electric')
+      AND (${body ?? null}::text IS NULL OR g.body_slug = ${body ?? null})
+      AND (${drive ?? null}::text IS NULL OR v.drive_wheel_en ILIKE ${drive ? `%${drive}%` : null})
+      AND (${powerMin ?? null}::int IS NULL OR v.power_hp >= ${powerMin ?? null})
+      AND (${powerMax ?? null}::int IS NULL OR v.power_hp <= ${powerMax ?? null})
+      AND (${priceMax ?? null}::int IS NULL OR v.price_new_eur <= ${priceMax ?? null})
+      AND (${year ?? null}::int IS NULL OR (g.years_start <= ${year ?? null} AND (g.years_end IS NULL OR g.years_end >= ${year ?? null})))
+    ORDER BY v.public_id ASC
+    LIMIT ${limit}
+  `;
+
+  const nextCursor = rows.length === limit ? rows[rows.length - 1].variant_id : null;
+  return c.json(
+    envelope(
+      rows.map((r) => ({
+        variant_id: r.variant_id,
+        generation_id: r.generation_id,
+        display_name: r.display_name,
+        power_hp: r.power_hp,
+        battery_kwh: r.battery_kwh !== null ? Number(r.battery_kwh) : null,
+        top_speed_kmh: r.top_speed_kmh,
+        torque_nm: r.torque_nm,
+        accel_0_100_s: r.accel_0_100_s !== null ? Number(r.accel_0_100_s) : null,
+        fuel_slug: r.fuel_slug,
+        body_type_en: r.body_type_en,
+        price_new_eur: r.price_new_eur,
+      })),
+      { locale, last_synced_at: maxSyncedAt(rows) },
+      { next: nextCursor ? String(nextCursor) : undefined },
+    ),
+  );
+});
 
 variants.get("/:id", async (c) => {
   const sql = getDb(c.env);
@@ -69,52 +144,70 @@ variants.get("/:id/specs", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
   const id = Number(c.req.param("id"));
-  const rows = await sql<
-    {
-      last_synced_at: Date | null;
-      specs: Record<string, RawSpecValue> | null;
-      fuel_type_en: string | null;
-      transmission_en: string | null;
-      drive_wheel_en: string | null;
-      body_type_en: string | null;
-    }[]
-  >`
-    SELECT v.last_synced_at, vd.specs,
-           v.fuel_type_en, v.transmission_en, v.drive_wheel_en, v.body_type_en
+  const result = await localizeVariantSpecs(sql, locale, id);
+  if (!result) {
+    const { body, status, headers } = problem(404, "Not Found", `No variant with id ${id}`);
+    return c.json(body, status, headers);
+  }
+  return c.json(
+    envelope(
+      { variant_id: id, locale, specs: result.specs },
+      { locale, last_synced_at: result.last_synced_at.toISOString() },
+    ),
+  );
+});
+
+variants.get("/:id/images", async (c) => {
+  const sql = getDb(c.env);
+  const id = Number(c.req.param("id"));
+  const exists = await sql`SELECT 1 FROM variants WHERE public_id = ${id} AND is_active LIMIT 1`;
+  if (exists.length === 0) {
+    const { body, status, headers } = problem(404, "Not Found", `No variant with id ${id}`);
+    return c.json(body, status, headers);
+  }
+  const rows = await sql<{ cdn_url: string; role: string }[]>`
+    SELECT ma.cdn_url, em.role
+    FROM entity_media em
+    JOIN media_assets ma ON ma.id = em.asset_id
+    WHERE em.entity_kind = 'variant' AND em.entity_id = ${id} AND ma.is_active
+    ORDER BY em.display_order ASC
+  `;
+  return c.json(
+    envelope(
+      rows.map((r) => ({
+        url: r.cdn_url,
+        variant: r.role === "hero" ? "hero" : "card",
+      })),
+      { last_synced_at: new Date().toISOString() },
+    ),
+  );
+});
+
+variants.get("/:id/prices", async (c) => {
+  const sql = getDb(c.env);
+  const id = Number(c.req.param("id"));
+  const rows = await sql<{ price_eur: number; recorded_at: Date }[]>`
+    SELECT ph.price_eur, ph.recorded_at
     FROM variants v
-    LEFT JOIN variant_doc vd ON vd.variant_id = v.public_id
-    WHERE v.is_active AND v.public_id = ${id}
+    JOIN prices_history ph ON ph.variant_id = v.id
+    WHERE v.public_id = ${id} AND v.is_active
+      AND ph.price_type = 'new_msrp' AND ph.market = 'NL'
+    ORDER BY ph.year DESC
     LIMIT 1
   `;
   const row = rows[0];
   if (!row) {
-    const { body, status, headers } = problem(404, "Not Found", `No variant with id ${id}`);
+    const { body, status, headers } = problem(404, "Not Found", `No price snapshot for variant ${id}`);
     return c.json(body, status, headers);
-  }
-  const t = await getTranslationCache(sql);
-  const raw = row.specs ?? {};
-  const localized: Record<string, ReturnType<typeof localizeSpec>> = {};
-  for (const [specKey, value] of Object.entries(raw)) {
-    localized[specKey] = localizeSpec(specKey, value, locale, t);
-  }
-  // fuel_type/transmission/drive_wheel/body_type live on the flat `variants`
-  // columns, not in spec_values (verified 2026-07-26: zero variant_doc rows
-  // carry these 4 spec_keys) — merge them in from enum_translations directly
-  // so /specs?locale= actually localizes them instead of silently omitting.
-  const flatEnums: Array<[string, string | null]> = [
-    ["fuel_type", row.fuel_type_en],
-    ["transmission", row.transmission_en],
-    ["drive_wheel", row.drive_wheel_en],
-    ["body_type", row.body_type_en],
-  ];
-  for (const [specKey, valueEn] of flatEnums) {
-    if (!valueEn) continue;
-    localized[specKey] = localizeSpec(specKey, { e: valueEn }, locale, t);
   }
   return c.json(
     envelope(
-      { variant_id: id, locale, specs: localized },
-      { locale, last_synced_at: (row.last_synced_at ?? new Date()).toISOString() },
+      {
+        variant_id: id,
+        price_eur: row.price_eur,
+        as_of: row.recorded_at.toISOString().slice(0, 10),
+      },
+      { last_synced_at: row.recorded_at.toISOString() },
     ),
   );
 });
