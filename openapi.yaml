@@ -1,0 +1,584 @@
+openapi: 3.1.0
+info:
+  title: cars-data.com API
+  version: "1.0.0"
+  summary: The car-specs API & MCP that AI agents call — generation-level, 19 languages, EV data.
+  description: |
+    Read-only, cacheable, versioned API over cars-data.com's multilingual vehicle
+    catalog (102k+ variants, 1,300+ models, 5,299+ generations, 180 spec types,
+    19 languages). Backed by the `variant_doc` read-model (see
+    specs/plans/BIZ-L2a-openapi-readmodel.md).
+
+    Phase 1 scope: per-lookup reads only, Free tier requires attribution, no
+    bulk export. See termsOfService.
+  termsOfService: https://cars-data.com/api/terms
+  contact:
+    name: cars-data.com
+    url: https://cars-data.com/api
+  license:
+    name: Proprietary — see Terms of Service
+    url: https://cars-data.com/api/terms
+servers:
+  - url: https://api.cars-data.com/v1
+    description: Production (pending Stage A infra — read-replica + subdomain)
+  - url: http://localhost:8790/v1
+    description: Local dev (wrangler dev, Hyperdrive localConnectionString -> cars_v3)
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: catalog
+    description: Brands, models, generations — cheap, very long cache
+  - name: variants
+    description: The "money" endpoints
+  - name: utilities
+    description: Search and compare
+  - name: enterprise
+    description: Gated; requires L0 clean provenance
+
+paths:
+  /brands:
+    get:
+      tags: [catalog]
+      summary: List all brands
+      operationId: listBrands
+      parameters:
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandListEnvelope'
+
+  /brands/{slug}:
+    get:
+      tags: [catalog]
+      summary: Get one brand
+      operationId: getBrand
+      parameters:
+        - $ref: '#/components/parameters/BrandSlug'
+        - $ref: '#/components/parameters/Locale'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /brands/{slug}/models:
+    get:
+      tags: [catalog]
+      summary: List models for a brand
+      operationId: listBrandModels
+      parameters:
+        - $ref: '#/components/parameters/BrandSlug'
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelListEnvelope'
+
+  /models/{id}/generations:
+    get:
+      tags: [catalog]
+      summary: List generations for a model
+      operationId: listModelGenerations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Locale'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationListEnvelope'
+
+  /generations/{id}/variants:
+    get:
+      tags: [catalog]
+      summary: List variants for a generation
+      operationId: listGenerationVariants
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantListEnvelope'
+
+  /specs/catalog:
+    get:
+      tags: [catalog]
+      summary: The 180 spec definitions + units + metadata
+      operationId: getSpecsCatalog
+      parameters:
+        - $ref: '#/components/parameters/Locale'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecDefinitionListEnvelope'
+
+  /variants/{id}:
+    get:
+      tags: [variants]
+      summary: Full specs for one variant (language-neutral)
+      operationId: getVariant
+      parameters:
+        - $ref: '#/components/parameters/VariantId'
+        - $ref: '#/components/parameters/Units'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /variants/{id}/specs:
+    get:
+      tags: [variants]
+      summary: Localized specs for one variant — the headline differentiator (19 languages)
+      operationId: getVariantSpecs
+      parameters:
+        - $ref: '#/components/parameters/VariantId'
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Units'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantSpecsEnvelope'
+        '402':
+          description: |
+            x402 payment required. Only returned when calling without an API
+            key and X402_ENABLED=true (Phase 1 §6 — this is the ONLY endpoint
+            gated by x402). Standard API-key requests never see this.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /variants/{id}/images:
+    get:
+      tags: [variants]
+      summary: Image URLs for a variant (own CDN, no attribution burden)
+      operationId: getVariantImages
+      parameters:
+        - $ref: '#/components/parameters/VariantId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /variants/{id}/prices:
+    get:
+      tags: [variants]
+      summary: Current price snapshot (labeled snapshot, not history — single 2026-05-10 dataset)
+      operationId: getVariantPrices
+      parameters:
+        - $ref: '#/components/parameters/VariantId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceSnapshotEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /variants:
+    get:
+      tags: [variants]
+      summary: Filter variants
+      operationId: filterVariants
+      parameters:
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+        - name: fuel
+          in: query
+          schema: { type: string }
+        - name: body
+          in: query
+          schema: { type: string }
+        - name: power_min
+          in: query
+          schema: { type: integer }
+        - name: power_max
+          in: query
+          schema: { type: integer }
+        - name: price_max
+          in: query
+          schema: { type: integer }
+        - name: year
+          in: query
+          schema: { type: integer }
+        - name: drive
+          in: query
+          schema: { type: string }
+        - name: ev
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantListEnvelope'
+
+  /search:
+    get:
+      tags: [utilities]
+      summary: Typeahead search (reuses lib/server/search.ts)
+      operationId: search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - $ref: '#/components/parameters/Locale'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResultEnvelope'
+
+  /compare:
+    get:
+      tags: [utilities]
+      summary: Side-by-side spec compare (reuses compare-picker.ts)
+      operationId: compare
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: 2-4 variant IDs, comma-separated
+          schema: { type: string, example: "1,2,3" }
+        - $ref: '#/components/parameters/Locale'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompareEnvelope'
+
+  /export:
+    get:
+      tags: [enterprise]
+      summary: Bulk/delta export (cursor-paginated) — GATED, disabled in Phase 1
+      description: |
+        Endpoint exists per the contract but is disabled/403 until L0 clean
+        provenance clears (see specs/plans/BIZ-L0-data-enrichment-clean-sourcing.md).
+        Do not enable without a legal review pass beyond the Phase-1 ToS.
+      operationId: exportVariants
+      x-phase1-gated: true
+      parameters:
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '403':
+          description: Gated in Phase 1 — see description.
+        '200':
+          description: (disabled) OK when ungated post-L0
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantListEnvelope'
+
+  /usage:
+    get:
+      tags: [utilities]
+      summary: Self-check current key's usage against its plan quota
+      operationId: getUsage
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageEnvelope'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+
+  parameters:
+    Locale:
+      name: locale
+      in: query
+      description: One of the 19 supported languages. Defaults to `en`.
+      schema:
+        type: string
+        default: en
+        enum: [en, ro, fr, de, es, it, sr, hr, pt, pl, cs, sk, hu, no, sv, el, bg, da, ar]
+    Units:
+      name: units
+      in: query
+      schema:
+        type: string
+        enum: [metric, imperial]
+        default: metric
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Fields:
+      name: fields
+      in: query
+      description: Sparse fieldset, comma-separated
+      schema: { type: string }
+    VariantId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+      description: variant_id == variants.public_id
+    BrandSlug:
+      name: slug
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    NotFound:
+      description: Not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  schemas:
+    ProblemDetail:
+      type: object
+      description: RFC 9457 problem+json
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+
+    Meta:
+      type: object
+      required: [last_synced_at]
+      properties:
+        locale: { type: string }
+        units: { type: string, enum: [metric, imperial] }
+        last_synced_at: { type: string, format: date-time }
+
+    Links:
+      type: object
+      properties:
+        next: { type: [string, "null"] }
+
+    Brand:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        sameAs:
+          type: array
+          items: { type: string }
+          description: Wikidata/Wikipedia links (T37 pattern), when available.
+
+    Model:
+      type: object
+      properties:
+        id: { type: integer }
+        brand_id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+
+    Generation:
+      type: object
+      properties:
+        id: { type: integer }
+        model_id: { type: integer }
+        slug: { type: string }
+        year_start: { type: integer }
+        year_end: { type: [integer, "null"] }
+
+    SpecValue:
+      type: object
+      description: One resolved spec value from variant_doc.specs[spec_key]
+      properties:
+        v:
+          description: Native value (number/bool/string) or localized label at read-time
+        u:
+          type: [string, "null"]
+          description: 'Unit, e.g. "kW", "km/h"'
+        confidence: { type: [number, "null"] }
+
+    Variant:
+      type: object
+      properties:
+        variant_id: { type: integer }
+        generation_id: { type: integer }
+        display_name: { type: string }
+        power_hp: { type: [integer, "null"] }
+        battery_kwh: { type: [number, "null"] }
+        top_speed_kmh: { type: [integer, "null"] }
+        torque_nm: { type: [integer, "null"] }
+        accel_0_100_s: { type: [number, "null"] }
+        fuel_slug: { type: [string, "null"] }
+        body_type_en: { type: [string, "null"] }
+        price_new_eur: { type: [integer, "null"] }
+        spec_count: { type: integer }
+
+    VariantSpecs:
+      type: object
+      properties:
+        variant_id: { type: integer }
+        locale: { type: string }
+        specs:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SpecValue'
+
+    SpecDefinition:
+      type: object
+      properties:
+        spec_key: { type: string }
+        display_name: { type: string }
+        unit: { type: [string, "null"] }
+        group: { type: [string, "null"] }
+
+    ImageRef:
+      type: object
+      properties:
+        url: { type: string, format: uri }
+        variant: { type: string, enum: [card, hero] }
+
+    PriceSnapshot:
+      type: object
+      description: Single point-in-time snapshot. NOT a history series — label as_of.
+      properties:
+        variant_id: { type: integer }
+        price_eur: { type: [integer, "null"] }
+        as_of: { type: string, format: date }
+
+    SearchResult:
+      type: object
+      properties:
+        variant_id: { type: integer }
+        display_name: { type: string }
+        brand_slug: { type: string }
+        model_slug: { type: string }
+
+    Usage:
+      type: object
+      properties:
+        plan: { type: string, enum: [free, apify, x402] }
+        used: { type: integer }
+        quota: { type: integer }
+        resets_at: { type: string, format: date-time }
+
+    # --- Envelopes: { data, meta, links? } per L2a §2 ---
+    BrandListEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Brand' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+        links: { $ref: '#/components/schemas/Links' }
+    BrandEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Brand' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ModelListEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Model' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+        links: { $ref: '#/components/schemas/Links' }
+    GenerationListEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Generation' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+    VariantListEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Variant' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+        links: { $ref: '#/components/schemas/Links' }
+    VariantEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Variant' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    VariantSpecsEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/VariantSpecs' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    SpecDefinitionListEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/SpecDefinition' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ImageListEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ImageRef' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+    PriceSnapshotEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/PriceSnapshot' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    SearchResultEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/SearchResult' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+    CompareEnvelope:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/VariantSpecs' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+    UsageEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Usage' }
+        meta: { $ref: '#/components/schemas/Meta' }

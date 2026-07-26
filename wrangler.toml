@@ -1,0 +1,19 @@
+name = "cars-data-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-09"
+compatibility_flags = ["nodejs_compat"]
+
+# Hyperdrive binding — `id` will be the real Hyperdrive config id once the
+# owner provisions the Hetzner read-replica (Stage A #2, production-touching).
+# `localConnectionString` lets `wrangler dev` talk to the local cars_v3
+# Postgres instance instead, so the service is fully runnable before that
+# infra exists.
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "TODO_SET_AFTER_READ_REPLICA_PROVISIONED"
+# password is a dummy value: local pg_hba.conf trusts 127.0.0.1 and ignores it
+localConnectionString = "postgresql://mmalaias-mac:localdev@127.0.0.1:5432/cars_v3"
+
+[vars]
+ENVIRONMENT = "development"
+X402_ENABLED = "false"
