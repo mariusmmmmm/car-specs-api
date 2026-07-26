@@ -14,6 +14,14 @@ id = "TODO_SET_AFTER_READ_REPLICA_PROVISIONED"
 # password is a dummy value: local pg_hba.conf trusts 127.0.0.1 and ignores it
 localConnectionString = "postgresql://mmalaias-mac:localdev@127.0.0.1:5432/cars_v3"
 
+# API keys + usage/rate-limit counters. `wrangler dev --local` simulates KV
+# in-memory regardless of `id` — no real Cloudflare KV namespace needed yet.
+# Owner creates the real namespace (`wrangler kv namespace create API_KEYS`)
+# when this deploys past local dev.
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "TODO_SET_AFTER_KV_NAMESPACE_CREATED"
+
 [vars]
 ENVIRONMENT = "development"
 X402_ENABLED = "false"
