@@ -1,8 +1,8 @@
 # cars-data.com — Car Specs API + MCP server
 
 REST API and remote MCP server over cars-data.com's multilingual vehicle-specs
-database: **102,190+ vehicle variants**, **1,300+ models**, **5,299+
-generations**, **180 spec types across 19 categories**, in **19 languages**
+database: **102,191 vehicle variants**, **1,300+ models**, **5,299 generations**,
+**180 spec types across 19 categories**, in **19 languages**
 (including Arabic, RTL).
 
 - REST API: `https://api.cars-data.com/v1`
@@ -29,7 +29,7 @@ Tools exposed:
 
 | Tool | What it does |
 |---|---|
-| `search_cars` | Free-text search across 102k+ variants, 115+ brands, 19 languages |
+| `search_cars` | Free-text search across 102,191 variants, 116 brands, 19 languages |
 | `get_specs` | Full localized specs for one variant — 180 spec types across 19 categories (safety, comfort/interior, engine & fuel, performance, EV/hybrid, chassis, exterior, dimensions & weights, WLTP/NEDC consumption, and more), with a confidence score and `last_synced_at` freshness timestamp |
 | `compare_variants` | Side-by-side localized specs for 2-4 variants |
 | `list_generations` | Generations/facelifts of a model, with production years |
@@ -69,7 +69,7 @@ curl -X POST https://api.cars-data.com/v1/keys \
   -d '{"email": "you@example.com", "accept_tos": true}'
 ```
 
-Free tier: 1,000 requests/month, 30 req/min.
+Free tier: 1,000 requests/month, 20 req/min.
 
 ## Pricing
 
