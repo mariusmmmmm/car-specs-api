@@ -52,12 +52,23 @@ export async function searchVariants(sql: Sql, locale: string, q: string, limit:
   const patLower = `%${normalizeLower(q)}%`;
   const patAlnum = `%${normalizeAlnum(q)}%`;
   const rows = await sql<
-    { variant_id: number; display_name: string; brand_slug: string; model_slug: string }[]
+    {
+      variant_id: number;
+      display_name: string;
+      brand_slug: string;
+      model_slug: string;
+      generation_id: number;
+      year_from: number | null;
+      year_to: number | null;
+    }[]
   >`
     SELECT v.public_id::int AS variant_id,
            COALESCE(vt.name, v.display_name) AS display_name,
            b.canonical_slug AS brand_slug,
-           COALESCE(mt.slug, m.canonical_slug) AS model_slug
+           COALESCE(mt.slug, m.canonical_slug) AS model_slug,
+           g.public_id::int AS generation_id,
+           g.years_start AS year_from,
+           g.years_end AS year_to
     FROM variants v
     JOIN generations g ON g.id = v.generation_id
     JOIN models m ON m.id = g.model_id
@@ -168,14 +179,19 @@ export async function filterVariants(sql: Sql, locale: string, f: VariantFilters
 }
 
 export async function getVariantImages(sql: Sql, variantId: number) {
-  const rows = await sql<{ cdn_url: string; role: string }[]>`
-    SELECT ma.cdn_url, em.role
+  // Source data can link the same cdn_url more than once (distinct asset rows,
+  // same URL) → dedup by URL keeping the lowest display_order, then re-sort by
+  // display_order so ordering is unchanged for the common (no-dup) case.
+  const rows = await sql<{ cdn_url: string; role: string; display_order: number }[]>`
+    SELECT DISTINCT ON (ma.cdn_url) ma.cdn_url, em.role, em.display_order
     FROM entity_media em
     JOIN media_assets ma ON ma.id = em.asset_id
     WHERE em.entity_kind = 'variant' AND em.entity_id = ${variantId} AND ma.is_active
-    ORDER BY em.display_order ASC
+    ORDER BY ma.cdn_url, em.display_order ASC
   `;
-  return rows;
+  return rows
+    .sort((a, b) => a.display_order - b.display_order)
+    .map(({ cdn_url, role }) => ({ cdn_url, role }));
 }
 
 export async function variantExists(sql: Sql, variantId: number): Promise<boolean> {

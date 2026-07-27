@@ -504,6 +504,9 @@ components:
         display_name: { type: string }
         brand_slug: { type: string }
         model_slug: { type: string }
+        generation_id: { type: integer, description: Generation this variant belongs to — disambiguates same-named variants across generations }
+        year_from: { type: [integer, "null"], description: Generation production start year }
+        year_to: { type: [integer, "null"], description: Generation production end year (null if still produced) }
 
     Usage:
       type: object

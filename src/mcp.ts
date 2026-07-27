@@ -39,7 +39,7 @@ export class CarsDataMCP extends McpAgent<Env> {
       "search_cars",
       {
         description:
-          "Free-text search across 102,191 vehicle variants, 116 brands, 19 languages. Returns candidate variant_ids to pass to get_specs/get_images/compare_variants.",
+          "Free-text search across 102,191 vehicle variants, 116 brands, 19 languages. Returns candidate variant_ids to pass to get_specs/get_images/compare_variants. Each result carries generation_id and year_from/year_to so same-named variants from different generations can be told apart.",
         inputSchema: {
           query: z.string().describe("e.g. 'bmw 3 series' or 'tesla model s'"),
           locale: localeSchema,
