@@ -1,11 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
 import { z } from "zod";
-import type { Env } from "./types";
+import type { Env, McpProps } from "./types";
 import { getDb } from "./lib/db";
 import { resolveLocale, SUPPORTED_LOCALES } from "./lib/locale";
 import { searchVariants, listGenerationsForModel, filterVariants, getVariantImages } from "./lib/queries";
 import { localizeVariantSpecs } from "./lib/localize-variant";
+import { recordMcpCall } from "./lib/usage";
 
 const localeSchema = z.enum(SUPPORTED_LOCALES).optional();
 
@@ -19,6 +20,17 @@ function json(value: unknown, isError = false) {
 // per L2b's explicit design; per-key auth/quota parity with REST is a fast-follow.
 export class CarsDataMCP extends McpAgent<Env> {
   server = new McpServer({ name: "cars-data-specs", version: "1.0.0" });
+
+  // One usage datapoint per tool call (BIZ-D7 §5). client = the MCP client's
+  // self-reported clientInfo.name from the initialize handshake (distinguishes
+  // Claude Desktop / Cursor / ChatGPT connectors / custom agents), falling back
+  // to the User-Agent carried in props; actor = the salted IP hash from props.
+  private track(tool: string, locale?: string): void {
+    const props = this.props as McpProps;
+    const client =
+      (this.server as McpServer).server.getClientVersion?.()?.name ?? props.ua ?? "-";
+    recordMcpCall(this.env, tool, locale ?? "-", client, props.ipHash ?? "-");
+  }
 
   async init() {
     const env = this.env;
@@ -35,6 +47,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         },
       },
       async ({ query, locale, limit }) => {
+        this.track("search_cars", locale);
         const sql = getDb(env);
         const rows = await searchVariants(sql, resolveLocale(locale), query, limit ?? 10);
         return json(rows);
@@ -52,6 +65,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         },
       },
       async ({ variant_id, locale }) => {
+        this.track("get_specs", locale);
         const sql = getDb(env);
         const loc = resolveLocale(locale);
         const result = await localizeVariantSpecs(sql, loc, variant_id);
@@ -75,6 +89,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         },
       },
       async ({ variant_ids, locale }) => {
+        this.track("compare_variants", locale);
         const sql = getDb(env);
         const loc = resolveLocale(locale);
         const results = await Promise.all(variant_ids.map((id) => localizeVariantSpecs(sql, loc, id)));
@@ -94,6 +109,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         inputSchema: { model_id: z.number().int(), locale: localeSchema },
       },
       async ({ model_id, locale }) => {
+        this.track("list_generations", locale);
         const sql = getDb(env);
         const rows = await listGenerationsForModel(sql, resolveLocale(locale), model_id);
         return json(rows);
@@ -119,6 +135,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         },
       },
       async (args) => {
+        this.track("filter_cars", args.locale);
         const sql = getDb(env);
         const rows = await filterVariants(sql, resolveLocale(args.locale), {
           fuel: args.fuel,
@@ -142,6 +159,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         inputSchema: { variant_id: z.number().int() },
       },
       async ({ variant_id }) => {
+        this.track("get_images");
         const sql = getDb(env);
         const rows = await getVariantImages(sql, variant_id);
         return json(rows);

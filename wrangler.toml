@@ -35,3 +35,20 @@ class_name = "CarsDataMCP"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["CarsDataMCP"]
+
+# Usage observability (BIZ-D7 §5): one custom datapoint per MCP tool call, REST
+# request and anon-429, queried via the Analytics Engine SQL API by
+# scripts/usage-report.mjs. Datapoints are tiny (5 blobs + 1 double vs the
+# 20-blob/16 KB cap); 3-month retention. Available on Workers Paid (this account
+# already runs Hyperdrive + a Durable Object).
+[[analytics_engine_datasets]]
+binding = "USAGE"
+dataset = "cars_data_api_usage"
+
+# Persistent Workers Logs — a debugging aid, not analytics (retention per plan).
+[observability]
+enabled = true
+
+# IP_HASH_SALT is NOT set here on purpose — it's a Worker secret so the salt
+# isn't committed (`wrangler secret put IP_HASH_SALT`); .dev.vars holds it for
+# `wrangler dev`. Only salted IP *hashes* are ever written to analytics (GDPR).

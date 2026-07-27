@@ -10,6 +10,7 @@ import { keys } from "./keys";
 import { usage } from "./usage";
 import { exportRoute } from "./export";
 import { requireApiKey } from "../middleware/auth";
+import { recordRestCall } from "../lib/usage";
 
 export const v1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -29,6 +30,19 @@ v1.route("/keys", keys);
 // Everything else needs a Free (or later, paid) API key + counts against quota.
 const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 protectedV1.use("*", requireApiKey);
+// Usage observability (BIZ-D7 §5): one datapoint per authenticated REST call,
+// after the route resolves so routePath is the matched pattern (not "*").
+// Runs only for requests that passed auth — rejected 401/429s never reach here.
+protectedV1.use("*", async (c, next) => {
+  await next();
+  recordRestCall(
+    c.env,
+    c.req.routePath,
+    c.req.query("locale") ?? "-",
+    c.get("apiKeyRecord")?.plan ?? "-",
+    (c.get("apiKeyHash") ?? "").slice(0, 8),
+  );
+});
 protectedV1.route("/", catalog);
 protectedV1.route("/variants", variants);
 protectedV1.route("/search", search);
