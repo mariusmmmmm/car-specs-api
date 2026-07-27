@@ -44,10 +44,18 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: Pl
     return { ok: false, reason: "rate", used: monthlyUsed, quota: monthly };
   }
 
-  await Promise.all([
-    kv.put(monthlyKey, String(monthlyUsed + 1), { expirationTtl: 60 * 60 * 24 * 35 }),
-    kv.put(minuteKey, String(minuteUsed + 1), { expirationTtl: 70 }),
-  ]);
+  // KV puts can fail — most notably the Workers KV free-tier daily put cap
+  // (1000/day), which returns 429 for the rest of the UTC day. Fail OPEN:
+  // serve the request unmetered rather than 500 the whole API. Metering/limits
+  // resume automatically when KV writes recover (cap reset, or Workers Paid).
+  try {
+    await Promise.all([
+      kv.put(monthlyKey, String(monthlyUsed + 1), { expirationTtl: 60 * 60 * 24 * 35 }),
+      kv.put(minuteKey, String(minuteUsed + 1), { expirationTtl: 70 }),
+    ]);
+  } catch (e) {
+    console.error("metering KV put failed — serving unmetered:", e);
+  }
 
   return { ok: true, used: monthlyUsed + 1, quota: monthly };
 }

@@ -38,7 +38,20 @@ keys.post("/", async (c) => {
     created_at: now,
     email_verified: false,
   };
-  await c.env.API_KEYS.put(`key:${keyHash}`, JSON.stringify(record));
+  try {
+    await c.env.API_KEYS.put(`key:${keyHash}`, JSON.stringify(record));
+  } catch (e) {
+    // Key issuance genuinely needs the KV write (unlike metering, we can't
+    // fail-open here). On a KV put failure (e.g. free-tier daily cap) return a
+    // clear, retryable 503 instead of a raw 500.
+    console.error("key issuance KV put failed:", e);
+    const { body, status, headers } = problem(
+      503,
+      "Service Unavailable",
+      "Could not issue a key right now — please try again shortly.",
+    );
+    return c.json(body, status, headers);
+  }
 
   return c.json(
     envelope(

@@ -11,6 +11,13 @@ export async function checkAnonRate(kv: KVNamespace, ip: string): Promise<boolea
   const key = `mcp-anon:${ip}:${minuteBucket}`;
   const used = Number((await kv.get(key)) ?? 0);
   if (used >= ANON_PER_MINUTE) return false;
-  await kv.put(key, String(used + 1), { expirationTtl: 70 });
+  // Fail OPEN on KV put failure (e.g. free-tier daily put cap → 429): let the
+  // MCP call through rather than 500 the server. Throttle resumes when KV
+  // writes recover. See quota.ts for the same rationale.
+  try {
+    await kv.put(key, String(used + 1), { expirationTtl: 70 });
+  } catch (e) {
+    console.error("anon-rate KV put failed — allowing:", e);
+  }
   return true;
 }
