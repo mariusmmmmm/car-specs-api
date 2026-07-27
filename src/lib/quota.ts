@@ -4,7 +4,7 @@ export type Plan = "free" | "apify";
 // (BIZ-L2b §2), not our Free-tier quota — this cap exists only as a backstop
 // against a bug/runaway loop, not as the real limit on legitimate usage.
 const QUOTAS: Record<Plan, { monthly: number; perMinute: number }> = {
-  free: { monthly: 1000, perMinute: 30 },
+  free: { monthly: 1000, perMinute: 20 },
   apify: { monthly: 100_000, perMinute: 120 },
 };
 
