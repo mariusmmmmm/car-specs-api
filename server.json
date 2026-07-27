@@ -9,7 +9,7 @@
     "source": "github"
   },
   "websiteUrl": "https://cars-data.com/en/api/for-ai-agents",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "remotes": [
     {
       "type": "streamable-http",
