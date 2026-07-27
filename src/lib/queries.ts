@@ -48,7 +48,7 @@ function toVariantSummary(r: {
   };
 }
 
-export async function searchVariants(sql: Sql, locale: string, q: string, limit: number) {
+export async function searchVariants(sql: Sql, locale: string, q: string, limit: number, offset = 0) {
   const patLower = `%${normalizeLower(q)}%`;
   const patAlnum = `%${normalizeAlnum(q)}%`;
   const rows = await sql<
@@ -84,13 +84,20 @@ export async function searchVariants(sql: Sql, locale: string, q: string, limit:
       OR f_unaccent_lower(COALESCE(bt.display_name, b.display_name)) LIKE ${patLower}
       OR f_unaccent_alnum(COALESCE(bt.display_name, b.display_name)) LIKE ${patAlnum}
     )
-    ORDER BY v.power_hp DESC NULLS LAST
-    LIMIT ${limit}
+    ORDER BY v.power_hp DESC NULLS LAST, v.public_id ASC
+    LIMIT ${limit} OFFSET ${offset}
   `;
   return rows;
 }
 
-export async function listGenerationsForModel(sql: Sql, locale: string, modelId: number) {
+// paging optional: the REST route paginates (50/page); the MCP list_generations
+// tool omits it and gets the full list (max ~51 per model).
+export async function listGenerationsForModel(
+  sql: Sql,
+  locale: string,
+  modelId: number,
+  paging?: { limit: number; offset: number },
+) {
   const rows = await sql<
     {
       id: number;
@@ -110,6 +117,7 @@ export async function listGenerationsForModel(sql: Sql, locale: string, modelId:
     LEFT JOIN generation_translations gt ON gt.generation_id = g.id AND gt.locale_code = ${locale}
     WHERE g.is_active AND m.public_id = ${modelId}
     ORDER BY g.years_start ASC
+    ${paging ? sql`LIMIT ${paging.limit} OFFSET ${paging.offset}` : sql``}
   `;
   return rows;
 }
@@ -158,7 +166,7 @@ export async function filterVariants(sql: Sql, locale: string, f: VariantFilters
     SELECT v.public_id::int AS variant_id, g.public_id::int AS generation_id,
            COALESCE(vt.name, v.display_name) AS display_name,
            v.power_hp, v.battery_kwh, v.top_speed_kmh, v.torque_nm, v.accel_0_100_s,
-           v.fuel_slug, v.body_type_en, v.price_new_eur, v.last_synced_at
+           v.fuel_slug, v.body_type_en, NULLIF(v.price_new_eur, 0) AS price_new_eur, v.last_synced_at
     FROM variants v
     JOIN generations g ON g.id = v.generation_id
     LEFT JOIN variant_translations vt ON vt.variant_id = v.id AND vt.locale_code = ${locale}
@@ -170,7 +178,7 @@ export async function filterVariants(sql: Sql, locale: string, f: VariantFilters
       AND (${drive}::text IS NULL OR v.drive_wheel_en ILIKE ${drive ? `%${drive}%` : null})
       AND (${powerMin}::int IS NULL OR v.power_hp >= ${powerMin})
       AND (${powerMax}::int IS NULL OR v.power_hp <= ${powerMax})
-      AND (${priceMax}::int IS NULL OR v.price_new_eur <= ${priceMax})
+      AND (${priceMax}::int IS NULL OR NULLIF(v.price_new_eur, 0) <= ${priceMax})
       AND (${year}::int IS NULL OR (g.years_start <= ${year} AND (g.years_end IS NULL OR g.years_end >= ${year})))
     ORDER BY v.public_id ASC
     LIMIT ${limit}

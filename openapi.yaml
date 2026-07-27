@@ -46,6 +46,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: OK
@@ -81,6 +82,7 @@ paths:
         - $ref: '#/components/parameters/BrandSlug'
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: OK
@@ -100,6 +102,8 @@ paths:
           required: true
           schema: { type: integer }
         - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: OK
@@ -120,6 +124,7 @@ paths:
           schema: { type: integer }
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: OK
@@ -135,6 +140,8 @@ paths:
       operationId: getSpecsCatalog
       parameters:
         - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: OK
@@ -227,6 +234,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
         - name: fuel
           in: query
           schema: { type: string }
@@ -270,6 +278,8 @@ paths:
           required: true
           schema: { type: string, minLength: 1 }
         - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: OK
@@ -361,7 +371,13 @@ components:
     Cursor:
       name: cursor
       in: query
+      description: Opaque pagination token — pass back the `links.next` value from the previous page. Omit for the first page.
       schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      description: Page size, 1–50. Defaults to 50.
+      schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
     Fields:
       name: fields
       in: query
@@ -539,6 +555,7 @@ components:
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/Generation' } }
         meta: { $ref: '#/components/schemas/Meta' }
+        links: { $ref: '#/components/schemas/Links' }
     VariantListEnvelope:
       type: object
       properties:
@@ -560,6 +577,7 @@ components:
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/SpecDefinition' } }
         meta: { $ref: '#/components/schemas/Meta' }
+        links: { $ref: '#/components/schemas/Links' }
     ImageListEnvelope:
       type: object
       properties:
@@ -575,6 +593,7 @@ components:
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/SearchResult' } }
         meta: { $ref: '#/components/schemas/Meta' }
+        links: { $ref: '#/components/schemas/Links' }
     CompareEnvelope:
       type: object
       properties:

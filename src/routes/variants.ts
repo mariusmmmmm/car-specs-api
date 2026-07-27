@@ -13,7 +13,7 @@ export const variants = new Hono<{ Bindings: Env }>();
 variants.get("/", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
-  const limit = Math.min(Number(c.req.query("limit") ?? 24) || 24, 50);
+  const limit = Math.min(Number(c.req.query("limit") ?? 50) || 50, 50);
 
   const rows = await filterVariants(sql, locale, {
     fuel: c.req.query("fuel"),
@@ -73,7 +73,7 @@ variants.get("/:id", async (c) => {
   >`
     SELECT v.public_id::int AS variant_id, g.public_id::int AS generation_id, v.display_name,
            v.power_hp, v.battery_kwh, v.top_speed_kmh, v.torque_nm, v.accel_0_100_s,
-           v.fuel_slug, v.body_type_en, v.price_new_eur, v.last_synced_at,
+           v.fuel_slug, v.body_type_en, NULLIF(v.price_new_eur, 0) AS price_new_eur, v.last_synced_at,
            vd.specs, vd.spec_count
     FROM variants v
     JOIN generations g ON g.id = v.generation_id

@@ -4,6 +4,7 @@ import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
 import { maxSyncedAt } from "../lib/meta";
+import { parsePaging, nextLink } from "../lib/pagination";
 import { listGenerationsForModel } from "../lib/queries";
 
 export const catalog = new Hono<{ Bindings: Env }>();
@@ -11,6 +12,7 @@ export const catalog = new Hono<{ Bindings: Env }>();
 catalog.get("/brands", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
+  const { limit, offset } = parsePaging(c);
   const rows = await sql<
     { id: number; slug: string; name: string; wikidata_qid: string | null; last_synced_at: Date | null }[]
   >`
@@ -21,6 +23,7 @@ catalog.get("/brands", async (c) => {
     LEFT JOIN brand_translations bt ON bt.brand_id = b.id AND bt.locale_code = ${locale}
     WHERE b.is_active
     ORDER BY b.popularity_score DESC, b.display_name ASC
+    LIMIT ${limit} OFFSET ${offset}
   `;
   return c.json(
     envelope(
@@ -31,6 +34,7 @@ catalog.get("/brands", async (c) => {
         sameAs: r.wikidata_qid ? [`https://www.wikidata.org/wiki/${r.wikidata_qid}`] : [],
       })),
       { locale, last_synced_at: maxSyncedAt(rows) },
+      nextLink(rows.length, limit, offset),
     ),
   );
 });
@@ -72,6 +76,7 @@ catalog.get("/brands/:slug/models", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
   const slug = c.req.param("slug");
+  const { limit, offset } = parsePaging(c);
   const rows = await sql<
     { id: number; brand_id: number; slug: string; name: string; last_synced_at: Date | null }[]
   >`
@@ -84,8 +89,9 @@ catalog.get("/brands/:slug/models", async (c) => {
     LEFT JOIN model_translations mt ON mt.model_id = m.id AND mt.locale_code = ${locale}
     WHERE m.is_active AND b.canonical_slug = ${slug}
     ORDER BY m.popularity_score DESC, m.display_name ASC
+    LIMIT ${limit} OFFSET ${offset}
   `;
-  if (rows.length === 0) {
+  if (rows.length === 0 && offset === 0) {
     const exists = await sql`SELECT 1 FROM brands WHERE canonical_slug = ${slug} AND is_active LIMIT 1`;
     if (exists.length === 0) {
       const { body, status, headers } = problem(404, "Not Found", `No brand with slug "${slug}"`);
@@ -96,6 +102,7 @@ catalog.get("/brands/:slug/models", async (c) => {
     envelope(
       rows.map((r) => ({ id: r.id, brand_id: r.brand_id, slug: r.slug, name: r.name })),
       { locale, last_synced_at: maxSyncedAt(rows) },
+      nextLink(rows.length, limit, offset),
     ),
   );
 });
@@ -104,8 +111,9 @@ catalog.get("/models/:id/generations", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
   const modelId = Number(c.req.param("id"));
-  const rows = await listGenerationsForModel(sql, locale, modelId);
-  if (rows.length === 0) {
+  const { limit, offset } = parsePaging(c);
+  const rows = await listGenerationsForModel(sql, locale, modelId, { limit, offset });
+  if (rows.length === 0 && offset === 0) {
     const exists = await sql`SELECT 1 FROM models WHERE public_id = ${modelId} AND is_active LIMIT 1`;
     if (exists.length === 0) {
       const { body, status, headers } = problem(404, "Not Found", `No model with id ${modelId}`);
@@ -123,6 +131,7 @@ catalog.get("/models/:id/generations", async (c) => {
         year_end: r.years_end,
       })),
       { locale, last_synced_at: maxSyncedAt(rows) },
+      nextLink(rows.length, limit, offset),
     ),
   );
 });
@@ -131,6 +140,7 @@ catalog.get("/generations/:id/variants", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
   const genId = Number(c.req.param("id"));
+  const { limit, offset } = parsePaging(c);
   const rows = await sql<
     {
       variant_id: number;
@@ -150,14 +160,15 @@ catalog.get("/generations/:id/variants", async (c) => {
     SELECT v.public_id::int AS variant_id, g.public_id::int AS generation_id,
            COALESCE(vt.name, v.display_name) AS display_name,
            v.power_hp, v.battery_kwh, v.top_speed_kmh, v.torque_nm, v.accel_0_100_s,
-           v.fuel_slug, v.body_type_en, v.price_new_eur, v.last_synced_at
+           v.fuel_slug, v.body_type_en, NULLIF(v.price_new_eur, 0) AS price_new_eur, v.last_synced_at
     FROM variants v
     JOIN generations g ON g.id = v.generation_id
     LEFT JOIN variant_translations vt ON vt.variant_id = v.id AND vt.locale_code = ${locale}
     WHERE v.is_active AND g.public_id = ${genId}
     ORDER BY v.display_name ASC
+    LIMIT ${limit} OFFSET ${offset}
   `;
-  if (rows.length === 0) {
+  if (rows.length === 0 && offset === 0) {
     const exists = await sql`SELECT 1 FROM generations WHERE public_id = ${genId} AND is_active LIMIT 1`;
     if (exists.length === 0) {
       const { body, status, headers } = problem(404, "Not Found", `No generation with id ${genId}`);
@@ -180,6 +191,7 @@ catalog.get("/generations/:id/variants", async (c) => {
         price_new_eur: r.price_new_eur,
       })),
       { locale, last_synced_at: maxSyncedAt(rows) },
+      nextLink(rows.length, limit, offset),
     ),
   );
 });
@@ -187,6 +199,7 @@ catalog.get("/generations/:id/variants", async (c) => {
 catalog.get("/specs/catalog", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
+  const { limit, offset } = parsePaging(c);
   const rows = await sql<
     { spec_key: string; display_name: string; unit: string | null; group: string | null }[]
   >`
@@ -197,8 +210,9 @@ catalog.get("/specs/catalog", async (c) => {
     LEFT JOIN specs_catalog_translations sct ON sct.spec_id = sc.id AND sct.locale_code = ${locale}
     WHERE sc.is_active
     ORDER BY cat.display_order, sc.display_order
+    LIMIT ${limit} OFFSET ${offset}
   `;
   return c.json(
-    envelope(rows, { locale, last_synced_at: new Date().toISOString() }),
+    envelope(rows, { locale, last_synced_at: new Date().toISOString() }, nextLink(rows.length, limit, offset)),
   );
 });

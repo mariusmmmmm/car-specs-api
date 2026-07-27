@@ -3,6 +3,7 @@ import type { Env } from "../types";
 import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
+import { parsePaging, nextLink } from "../lib/pagination";
 import { searchVariants } from "../lib/queries";
 
 export const search = new Hono<{ Bindings: Env }>();
@@ -15,14 +16,14 @@ export const search = new Hono<{ Bindings: Env }>();
 search.get("/", async (c) => {
   const q = c.req.query("q")?.trim();
   const locale = resolveLocale(c.req.query("locale"));
-  const limit = Math.min(Number(c.req.query("limit") ?? 24) || 24, 50);
+  const { limit, offset } = parsePaging(c);
   if (!q) {
     const { body, status, headers } = problem(400, "Bad Request", "Missing required query param: q");
     return c.json(body, status, headers);
   }
 
   const sql = getDb(c.env);
-  const rows = await searchVariants(sql, locale, q, limit);
+  const rows = await searchVariants(sql, locale, q, limit, offset);
 
   return c.json(
     envelope(
@@ -36,6 +37,7 @@ search.get("/", async (c) => {
         year_to: r.year_to,
       })),
       { locale, last_synced_at: new Date().toISOString() },
+      nextLink(rows.length, limit, offset),
     ),
   );
 });
