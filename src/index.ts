@@ -33,7 +33,7 @@ export default {
       // on what one machine could pull. Same gate, same quota as REST; the key
       // comes as X-Api-Key or Authorization: Bearer (what MCP clients send).
       const iph = await ipHash(request.headers.get("cf-connecting-ip") ?? "unknown", env.IP_HASH_SALT);
-      const auth = await authenticate(env, readApiKey(request.headers));
+      const auth = await authenticate(env, readApiKey(request.headers, url));
       if (!auth.ok) {
         recordMcpThrottled(env, iph, auth.status === 429 ? "quota" : "unauthorized");
         const titles = { 401: "Unauthorized", 403: "Forbidden", 429: "Too Many Requests" } as const;

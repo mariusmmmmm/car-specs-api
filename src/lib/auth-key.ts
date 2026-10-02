@@ -8,14 +8,17 @@ export type AuthResult =
 
 const GET_KEY = "Request a free key at https://cars-data.com/en/api/for-ai-agents (manually reviewed), or use the Apify Actor.";
 
-/** Pull the key from `X-Api-Key` or `Authorization: Bearer …` — MCP clients
- *  (Claude, Cursor, ChatGPT connectors) mostly offer the second. */
-export function readApiKey(headers: Headers): string | null {
+/** Pull the key from `X-Api-Key` or `Authorization: Bearer …` (Cursor,
+ *  Claude Desktop, Windsurf configs). For MCP only, also `?key=` in the URL:
+ *  the claude.ai and ChatGPT custom-connector dialogs take a URL and nothing
+ *  else, so a header can't be set there. */
+export function readApiKey(headers: Headers, url?: URL): string | null {
   const x = headers.get("X-Api-Key")?.trim();
   if (x) return x;
   const auth = headers.get("Authorization") ?? "";
   const m = /^Bearer\s+(\S+)$/i.exec(auth.trim());
-  return m ? m[1] : null;
+  if (m) return m[1];
+  return url?.searchParams.get("key")?.trim() || null;
 }
 
 /** One gate for REST and MCP: the key must exist, be approved, not revoked,

@@ -37,7 +37,7 @@ Tools exposed:
 | `filter_cars` | Structured filter: fuel, body, drive, power/price range, year, EV-only |
 | `get_images` | Image URLs (own CDN) for a vehicle variant |
 
-The MCP server needs an API key, like the REST API — send it as `Authorization: Bearer <key>` or `X-Api-Key`. Calls count against the same monthly quota.
+The MCP server needs an API key, like the REST API — send it as `Authorization: Bearer <key>` or `X-Api-Key`. Where a client takes only a URL (claude.ai and ChatGPT custom connectors), use `https://api.cars-data.com/mcp?key=<key>`. Calls count against the same monthly quota.
 
 ## REST API
 

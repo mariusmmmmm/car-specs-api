@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { keys, REQUESTS_PER_IP_PER_DAY } from "../src/routes/keys";
 import { admin } from "../src/routes/admin";
-import { authenticate } from "../src/lib/auth-key";
+import { authenticate, readApiKey } from "../src/lib/auth-key";
 import { sha256Hex, type KeyRecord } from "../src/lib/apikey";
 import type { Env } from "../src/types";
 
@@ -142,6 +142,13 @@ describe("authenticate", () => {
   it("leaves Apify keys working without approval", async () => {
     await put("cd_apify_x", { plan: "apify" });
     expect((await authenticate(env, "cd_apify_x")).ok).toBe(true);
+  });
+
+  it("reads the key from X-Api-Key, Bearer, or ?key= (MCP URL-only connectors)", () => {
+    expect(readApiKey(new Headers({ "X-Api-Key": "a" }))).toBe("a");
+    expect(readApiKey(new Headers({ Authorization: "Bearer b" }))).toBe("b");
+    expect(readApiKey(new Headers(), new URL("https://api.cars-data.com/mcp?key=c"))).toBe("c");
+    expect(readApiKey(new Headers())).toBeNull();
   });
 
   it("requires a key at all", async () => {
