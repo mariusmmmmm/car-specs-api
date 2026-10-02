@@ -42,8 +42,8 @@ export function recordRestCall(env: Env, route: string, locale: string, plan: st
   write(env, ["rest", route || "-", locale || "-", plan || "-", keyPrefix || "-"]);
 }
 
-/** blob2 = which limit tripped ("minute" | "month"), so the report can tell
- *  a burst from an IP that used up its month. */
-export function recordMcpThrottled(env: Env, actor: string, reason: "minute" | "month" = "minute"): void {
+/** An MCP request turned away at the door. blob2 = why ("unauthorized" covers
+ *  a missing, unknown, unapproved or revoked key; "quota" the key's limits). */
+export function recordMcpThrottled(env: Env, actor: string, reason: "unauthorized" | "quota"): void {
   write(env, ["mcp-throttled", reason, "-", "-", actor || "-"]);
 }

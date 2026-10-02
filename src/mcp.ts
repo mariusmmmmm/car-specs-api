@@ -16,8 +16,8 @@ function json(value: unknown, isError = false) {
 
 // Thin MCP wrapper over the same /v1 read-model (lib/queries.ts, lib/localize-variant.ts)
 // — no separate query logic, per BIZ-L2b-mcp-apify-distribution.md §1.
-// Phase 1: unauthenticated (rate-limited per-IP in index.ts) for discovery,
-// per L2b's explicit design; per-key auth/quota parity with REST is a fast-follow.
+// Every request is authenticated in index.ts with the same key + quota gate as
+// REST (T73); this class only ever sees approved, in-quota callers.
 export class CarsDataMCP extends McpAgent<Env> {
   server = new McpServer({ name: "cars-data-specs", version: "1.0.0" });
 
@@ -29,7 +29,7 @@ export class CarsDataMCP extends McpAgent<Env> {
     const props = this.props as McpProps;
     const client =
       (this.server as McpServer).server.getClientVersion?.()?.name ?? props.ua ?? "-";
-    recordMcpCall(this.env, tool, locale ?? "-", client, props.ipHash ?? "-");
+    recordMcpCall(this.env, tool, locale ?? "-", client, props.keyPrefix ?? props.ipHash ?? "-");
   }
 
   async init() {

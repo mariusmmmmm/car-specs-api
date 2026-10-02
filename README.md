@@ -19,7 +19,8 @@ Connect directly from Claude, ChatGPT connectors, Cursor, or Windsurf:
   "mcpServers": {
     "cars-data": {
       "type": "http",
-      "url": "https://api.cars-data.com/mcp"
+      "url": "https://api.cars-data.com/mcp",
+      "headers": { "Authorization": "Bearer cd_free_..." }
     }
   }
 }
@@ -36,7 +37,7 @@ Tools exposed:
 | `filter_cars` | Structured filter: fuel, body, drive, power/price range, year, EV-only |
 | `get_images` | Image URLs (own CDN) for a vehicle variant |
 
-The MCP server is unauthenticated for discovery (rate-limited per IP). No signup required to try it.
+The MCP server needs an API key, like the REST API — send it as `Authorization: Bearer <key>` or `X-Api-Key`. Calls count against the same monthly quota.
 
 ## REST API
 
@@ -61,19 +62,29 @@ curl https://api.cars-data.com/v1/variants/42164/specs?locale=de \
 | `GET /specs/catalog` | The full spec-type catalog (categories + counts) |
 | `GET /usage` | Self-check current quota usage for your key |
 
-### Get a free API key
+### Request a free API key
+
+Every key is reviewed by hand. Send a request; if it is approved, the key is
+emailed to you.
 
 ```bash
 curl -X POST https://api.cars-data.com/v1/keys \
   -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "accept_tos": true}'
+  -d '{"email": "you@example.com", "name": "Your Name", "use_case": "What you are building, in a sentence or two", "accept_tos": true}'
 ```
 
-Free tier: 1,000 requests/month, 20 req/min.
+Returns `202 pending_review`. Free tier: 1,000 requests/month, 20 req/min,
+attribution required. Bulk data is licensed separately: https://cars-data.com/en/api.
+
+### Key administration (owner)
+
+`node scripts/keys-admin.mjs requests | approve <id> | reject <id> | keys | approve-key <prefix> | revoke-key <prefix>`
+— needs the `ADMIN_TOKEN` Worker secret (also in `../.secrets/api-admin.env`).
+Worker secrets for the flow: `ADMIN_TOKEN`, `BREVO_API_KEY`, `NOTIFY_TO`, `NOTIFY_FROM`.
 
 ## Pricing
 
-- **Free** — 1,000 req/month, instant self-serve key, no payment.
+- **Free** — 1,000 req/month, key issued after manual review, no payment.
 - **Apify** — pay-per-event, billed through the [Apify Store listing](https://apify.com/carsdatacom/car-specs-api), no API key needed.
 - **x402** — per-call USDC payment on Base for agents that want to pay without an account (not yet live — see the project roadmap).
 

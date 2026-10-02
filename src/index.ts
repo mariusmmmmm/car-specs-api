@@ -3,7 +3,7 @@ import type { Env } from "./types";
 import { v1 } from "./routes/v1";
 import { problem } from "./lib/response";
 import { CarsDataMCP } from "./mcp";
-import { checkAnonRate, ANON_PER_MINUTE, ANON_PER_MONTH } from "./lib/anon-quota";
+import { authenticate, readApiKey } from "./lib/auth-key";
 import { ipHash, recordMcpThrottled } from "./lib/usage";
 import type { McpProps } from "./types";
 
@@ -28,24 +28,28 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/mcp") {
-      const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
-      const iph = await ipHash(ip, env.IP_HASH_SALT);
-      const limit = await checkAnonRate(env.API_KEYS, ip);
-      if (!limit.ok) {
-        recordMcpThrottled(env, iph, limit.reason);
-        const { body, status, headers } = problem(
-          429,
-          "Too Many Requests",
-          limit.reason === "month"
-            ? `Anonymous MCP access is limited to ${ANON_PER_MONTH} requests per month per IP. For more, use the REST API with a free key or the Apify Actor — see https://cars-data.com/en/api/for-ai-agents. Bulk data: https://cars-data.com/en/api.`
-            : `MCP anonymous rate limit exceeded (${ANON_PER_MINUTE}/min).`,
-        );
-        return new Response(JSON.stringify(body), { status, headers: headers as HeadersInit });
+      // MCP needs an API key like REST (T73, owner decision 2026-10-02). It
+      // used to be anonymous with a per-IP minute limit, which put no ceiling
+      // on what one machine could pull. Same gate, same quota as REST; the key
+      // comes as X-Api-Key or Authorization: Bearer (what MCP clients send).
+      const iph = await ipHash(request.headers.get("cf-connecting-ip") ?? "unknown", env.IP_HASH_SALT);
+      const auth = await authenticate(env, readApiKey(request.headers));
+      if (!auth.ok) {
+        recordMcpThrottled(env, iph, auth.status === 429 ? "quota" : "unauthorized");
+        const titles = { 401: "Unauthorized", 403: "Forbidden", 429: "Too Many Requests" } as const;
+        const { body, status, headers } = problem(auth.status, titles[auth.status], auth.detail);
+        const h: Record<string, string> = { ...headers };
+        if (auth.status === 401) h["WWW-Authenticate"] = 'Bearer realm="cars-data.com API"';
+        return new Response(JSON.stringify(body), { status, headers: h });
       }
-      // Carry the hashed IP + UA into the McpAgent DO via ctx.props (McpAgent
-      // reads props from the execution context) so per-tool-call telemetry can
-      // attribute a call without the raw IP ever crossing into the DO.
-      const props: McpProps = { ipHash: iph, ua: request.headers.get("user-agent") ?? undefined };
+      // Carry the hashed IP + UA + key prefix into the McpAgent DO via
+      // ctx.props so per-tool-call telemetry can attribute a call without the
+      // raw IP or key ever crossing into the DO.
+      const props: McpProps = {
+        ipHash: iph,
+        ua: request.headers.get("user-agent") ?? undefined,
+        keyPrefix: auth.keyHash.slice(0, 8),
+      };
       (ctx as ExecutionContext & { props?: McpProps }).props = props;
       return CarsDataMCP.serve("/mcp").fetch(request, env, ctx);
     }

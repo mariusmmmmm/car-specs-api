@@ -1,19 +1,27 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.cars-data/car-specs-api",
-  "title": "cars-data.com — Car Specs API",
-  "description": "Search, compare & filter 102,191 European car variants — 180 specs, 19 languages, EV data.",
+  "title": "cars-data.com \u2014 Car Specs API",
+  "description": "Search, compare & filter 102,191 European car variants \u2014 180 specs, 19 languages, EV data.",
   "status": "active",
   "repository": {
     "url": "https://github.com/mariusmmmmm/car-specs-api",
     "source": "github"
   },
   "websiteUrl": "https://cars-data.com/en/api/for-ai-agents",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://api.cars-data.com/mcp"
+      "url": "https://api.cars-data.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <your cars-data.com API key> \u2014 request one at https://cars-data.com/en/api/for-ai-agents (manually reviewed).",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
     }
   ]
 }
