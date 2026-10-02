@@ -16,6 +16,29 @@ export const TOS_VERSION = "2026-10-02-v1";
 // One open-or-approved request per email: asking again changes nothing.
 export const REQUESTS_PER_IP_PER_DAY = 3;
 
+// The request form on cars-data.com/en/api/for-ai-agents posts here straight
+// from the browser, so the per-IP cap sees the visitor's IP (a server-side
+// proxy would put every request on the site's one IP). CORS is not a guard —
+// curl ignores it — the review is.
+const FORM_ORIGINS = /^https:\/\/(www\.)?cars-data\.com$|^http:\/\/localhost:\d+$/;
+keys.use("*", async (c, next) => {
+  const origin = c.req.header("Origin") ?? "";
+  const allowed = FORM_ORIGINS.test(origin);
+  if (c.req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: allowed
+        ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" }
+        : {},
+    });
+  }
+  await next();
+  if (allowed) {
+    c.res.headers.set("Access-Control-Allow-Origin", origin);
+    c.res.headers.append("Vary", "Origin");
+  }
+});
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 

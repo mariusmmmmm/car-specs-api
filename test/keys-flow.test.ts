@@ -81,6 +81,21 @@ describe("key requests", () => {
   });
 });
 
+describe("browser form CORS", () => {
+  it("answers the preflight for cars-data.com and echoes the origin on POST", async () => {
+    const pre = await app.request("/v1/keys", { method: "OPTIONS", headers: { Origin: "https://cars-data.com" } }, env, ctx);
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("Access-Control-Allow-Origin")).toBe("https://cars-data.com");
+    const res = await app.request("/v1/keys", { method: "POST", headers: { Origin: "https://cars-data.com", "content-type": "application/json" }, body: JSON.stringify(valid) }, env, ctx);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://cars-data.com");
+  });
+
+  it("does not grant CORS to other origins", async () => {
+    const pre = await app.request("/v1/keys", { method: "OPTIONS", headers: { Origin: "https://evil.example" } }, env, ctx);
+    expect(pre.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+});
+
 describe("admin approval", () => {
   it("is invisible without the admin token", async () => {
     expect((await adminCall("/requests", "GET", "wrong")).status).toBe(404);
