@@ -38,3 +38,37 @@ export async function sendEmail(
     return false;
   }
 }
+
+const DEFAULT_INGEST_URL = "https://cars-data.com/api/inbox/ingest";
+
+/**
+ * Hand one inbound message to the website's inbox (T77): the site stores it in
+ * contact_messages and emails the owner. Returns false when ingest is not
+ * configured or fails, so the caller can fall back to sending the email
+ * itself. Never throws.
+ */
+export async function ingestToInbox(
+  env: Env,
+  msg: {
+    kind: "api_key_request";
+    name: string;
+    email: string;
+    subject: string;
+    message: string;
+    meta?: Record<string, unknown>;
+  },
+): Promise<boolean> {
+  if (!env.INBOX_INGEST_TOKEN) return false;
+  try {
+    const res = await fetch(env.INBOX_INGEST_URL || DEFAULT_INGEST_URL, {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.INBOX_INGEST_TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ ...msg, locale_code: "en", source_url: "https://api.cars-data.com/v1/keys" }),
+    });
+    if (!res.ok) console.error("inbox ingest failed:", res.status, await res.text().catch(() => ""));
+    return res.ok;
+  } catch (e) {
+    console.error("inbox ingest threw:", e);
+    return false;
+  }
+}

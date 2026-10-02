@@ -17,6 +17,11 @@ export type Env = {
   BREVO_API_KEY?: string;
   NOTIFY_TO?: string;
   NOTIFY_FROM?: string;
+  // T77: key requests are also written to cars-data.com's contact_messages
+  // (the one table the daily inbox agent reads) via POST /api/inbox/ingest.
+  // INBOX_INGEST_TOKEN is a secret; INBOX_INGEST_URL defaults to production.
+  INBOX_INGEST_TOKEN?: string;
+  INBOX_INGEST_URL?: string;
 };
 
 // Props carried from the /mcp entrypoint (index.ts) into the McpAgent Durable

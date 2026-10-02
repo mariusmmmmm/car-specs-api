@@ -155,3 +155,38 @@ describe("authenticate", () => {
     expect(await authenticate(env, null)).toMatchObject({ ok: false, status: 401 });
   });
 });
+
+// T77: a key request goes into the site's contact_messages via /api/inbox/ingest
+// (which emails the owner); the Worker emails directly only if that fails.
+describe("key requests → site inbox (T77)", () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  let calls: { url: string; body: Record<string, unknown> }[];
+  const stubFetch = (ingestStatus: number) =>
+    vi.stubGlobal("fetch", async (u: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      calls.push({ url: String(u), body });
+      return new Response("{}", { status: String(u).includes("/api/inbox/ingest") ? ingestStatus : 201 });
+    });
+  beforeEach(() => {
+    calls = [];
+    env = { ...env, INBOX_INGEST_TOKEN: "ingest-secret" } as Env;
+  });
+
+  it("stores it through the ingest route and sends no second email", async () => {
+    stubFetch(201);
+    expect((await request(valid)).status).toBe(202);
+    await flush();
+    expect(calls.map((c) => c.url)).toEqual(["https://cars-data.com/api/inbox/ingest"]);
+    expect(calls[0].body.kind).toBe("api_key_request");
+    expect(calls[0].body.email).toBe("dev@example.com");
+    expect(JSON.stringify(calls[0].body)).not.toContain("1.1.1.1"); // only the hash leaves
+  });
+
+  it("falls back to emailing the owner when ingest fails", async () => {
+    stubFetch(500);
+    expect((await request(valid)).status).toBe(202);
+    await flush();
+    expect(calls).toHaveLength(2);
+    expect(calls[1].url).toContain("api.brevo.com");
+  });
+});

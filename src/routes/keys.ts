@@ -3,7 +3,7 @@ import type { Env } from "../types";
 import { envelope, problem } from "../lib/response";
 import { sha256Hex, type KeyRequest } from "../lib/apikey";
 import { ipHash } from "../lib/usage";
-import { sendEmail } from "../lib/notify";
+import { ingestToInbox, sendEmail } from "../lib/notify";
 
 export const keys = new Hono<{ Bindings: Env }>();
 
@@ -107,20 +107,31 @@ keys.post("/", async (c) => {
     return c.json(body, status, headers);
   }
 
-  if (c.env.NOTIFY_TO) {
-    c.executionCtx.waitUntil(
-      sendEmail(c.env, {
-        to: c.env.NOTIFY_TO,
-        replyTo: email,
-        subject: `[cars-data API] Key request ${req.id} — ${company ?? name}`,
-        text:
-          `New API key request — waiting for your approval.\n\n` +
-          `Request: ${req.id}\nName:    ${name}\nEmail:   ${email}\nCompany: ${company ?? "—"}\n\n` +
-          `Use case:\n${useCase}\n\n` +
-          `Approve: node scripts/keys-admin.mjs approve ${req.id}\n` +
-          `Reject:  node scripts/keys-admin.mjs reject ${req.id}\n`,
-      }),
-    );
-  }
+  // One message, two ways out (T77): into the site's contact_messages (which
+  // also emails the owner), and only if that fails, an email straight from
+  // here — never both, so a request is never announced twice. The raw IP is
+  // not passed on; the table gets the same hash KV keeps.
+  const subject = `Key request ${req.id} — ${company ?? name}`;
+  const text =
+    `New API key request — waiting for your approval.\n\n` +
+    `Request: ${req.id}\nName:    ${name}\nEmail:   ${email}\nCompany: ${company ?? "—"}\n\n` +
+    `Use case:\n${useCase}\n\n` +
+    `Approve: node scripts/keys-admin.mjs approve ${req.id}\n` +
+    `Reject:  node scripts/keys-admin.mjs reject ${req.id}\n`;
+  c.executionCtx.waitUntil(
+    (async () => {
+      const stored = await ingestToInbox(c.env, {
+        kind: "api_key_request",
+        name,
+        email,
+        subject,
+        message: text,
+        meta: { request_id: req.id, company, tos_version: TOS_VERSION, ip_hash: iph },
+      });
+      if (!stored && c.env.NOTIFY_TO) {
+        await sendEmail(c.env, { to: c.env.NOTIFY_TO, replyTo: email, subject: `[cars-data API] ${subject}`, text });
+      }
+    })(),
+  );
   return accepted();
 });
