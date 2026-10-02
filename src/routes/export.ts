@@ -11,7 +11,7 @@ exportRoute.get("/", (c) => {
   const { body, status, headers } = problem(
     403,
     "Forbidden",
-    "Bulk/export is gated pending L0 clean-sourcing provenance. See https://cars-data.com/api/terms.",
+    "Bulk data is not served through the API. Exports of the modules you need, with optional updates, are licensed separately — see https://cars-data.com/en/api.",
   );
   return c.json(body, status, headers);
 });

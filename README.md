@@ -82,12 +82,12 @@ There is no subscription/Stripe tier — Free and Apify (and, later, x402) are t
 ## Data & attribution
 
 Data comes from cars-data.com's multilingual vehicle-specs database. See
-[cars-data.com/api/terms](https://cars-data.com/api/terms) for the API Terms
+[cars-data.com/en/api/terms](https://cars-data.com/en/api/terms) for the API Terms
 of Service (attribution required on Free tier; no bulk extraction / resale).
 
 ## License
 
 The API and its documentation in this repository are provided as-is. Access
-to the underlying dataset is governed by the [API Terms of Service](https://cars-data.com/api/terms),
+to the underlying dataset is governed by the [API Terms of Service](https://cars-data.com/en/api/terms),
 not an open-source license — this repo documents and hosts the server
 implementation, not a redistributable dataset.

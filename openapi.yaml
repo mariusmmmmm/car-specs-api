@@ -9,15 +9,16 @@ info:
     19 languages). Backed by the `variant_doc` read-model (see
     specs/plans/BIZ-L2a-openapi-readmodel.md).
 
-    Phase 1 scope: per-lookup reads only, Free tier requires attribution, no
-    bulk export. See termsOfService.
-  termsOfService: https://cars-data.com/api/terms
+    Phase 1 scope: per-lookup reads only, Free tier requires attribution. Bulk
+    data is licensed separately as modular exports with optional updates —
+    see https://cars-data.com/en/api. See termsOfService.
+  termsOfService: https://cars-data.com/en/api/terms
   contact:
     name: cars-data.com
     url: https://cars-data.com/api
   license:
     name: Proprietary — see Terms of Service
-    url: https://cars-data.com/api/terms
+    url: https://cars-data.com/en/api/terms
 servers:
   - url: https://api.cars-data.com/v1
     description: Production

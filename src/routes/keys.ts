@@ -5,9 +5,10 @@ import { generateApiKey, sha256Hex, type KeyRecord } from "../lib/apikey";
 
 export const keys = new Hono<{ Bindings: Env }>();
 
-// Bump when specs/plans/BIZ-API-terms-of-service-draft.md changes; kept with
-// the key record so we know which version a given customer accepted.
-const TOS_VERSION = "2026-07-26-draft-v1";
+// Kept with the key record so we know which version a customer accepted.
+// Must match DATA_TERMS_VERSION in v3/lib/config/data-pricing.ts — the
+// published text at /en/api/terms (T73). Bump both together.
+const TOS_VERSION = "2026-10-02-v1";
 
 keys.post("/", async (c) => {
   const payload = await c.req.json().catch(() => null);
@@ -22,7 +23,7 @@ keys.post("/", async (c) => {
     const { body, status, headers } = problem(
       400,
       "Bad Request",
-      "`accept_tos: true` is required — see https://cars-data.com/api/terms.",
+      "`accept_tos: true` is required — see https://cars-data.com/en/api/terms.",
     );
     return c.json(body, status, headers);
   }
