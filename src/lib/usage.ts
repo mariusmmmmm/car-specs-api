@@ -42,6 +42,8 @@ export function recordRestCall(env: Env, route: string, locale: string, plan: st
   write(env, ["rest", route || "-", locale || "-", plan || "-", keyPrefix || "-"]);
 }
 
-export function recordMcpThrottled(env: Env, actor: string): void {
-  write(env, ["mcp-throttled", "-", "-", "-", actor || "-"]);
+/** blob2 = which limit tripped ("minute" | "month"), so the report can tell
+ *  a burst from an IP that used up its month. */
+export function recordMcpThrottled(env: Env, actor: string, reason: "minute" | "month" = "minute"): void {
+  write(env, ["mcp-throttled", reason, "-", "-", actor || "-"]);
 }

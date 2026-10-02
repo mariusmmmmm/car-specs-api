@@ -3,7 +3,7 @@ import type { Env } from "./types";
 import { v1 } from "./routes/v1";
 import { problem } from "./lib/response";
 import { CarsDataMCP } from "./mcp";
-import { checkAnonRate } from "./lib/anon-quota";
+import { checkAnonRate, ANON_PER_MINUTE, ANON_PER_MONTH } from "./lib/anon-quota";
 import { ipHash, recordMcpThrottled } from "./lib/usage";
 import type { McpProps } from "./types";
 
@@ -30,13 +30,15 @@ export default {
     if (url.pathname === "/mcp") {
       const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
       const iph = await ipHash(ip, env.IP_HASH_SALT);
-      const allowed = await checkAnonRate(env.API_KEYS, ip);
-      if (!allowed) {
-        recordMcpThrottled(env, iph);
+      const limit = await checkAnonRate(env.API_KEYS, ip);
+      if (!limit.ok) {
+        recordMcpThrottled(env, iph, limit.reason);
         const { body, status, headers } = problem(
           429,
           "Too Many Requests",
-          "MCP anonymous rate limit exceeded (20/min).",
+          limit.reason === "month"
+            ? `Anonymous MCP access is limited to ${ANON_PER_MONTH} requests per month per IP. For more, use the REST API with a free key or the Apify Actor — see https://cars-data.com/en/api/for-ai-agents. Bulk data: https://cars-data.com/en/api.`
+            : `MCP anonymous rate limit exceeded (${ANON_PER_MINUTE}/min).`,
         );
         return new Response(JSON.stringify(body), { status, headers: headers as HeadersInit });
       }
