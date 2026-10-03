@@ -4,7 +4,7 @@ import { checkAndConsume } from "./quota";
 
 export type AuthResult =
   | { ok: true; keyHash: string; record: KeyRecord }
-  | { ok: false; status: 401 | 403 | 429; detail: string };
+  | { ok: false; status: 401 | 403 | 429 | 503; detail: string };
 
 const GET_KEY = "Request a free key at https://cars-data.com/en/api/for-ai-agents (manually reviewed), or use the Apify Actor.";
 
@@ -40,12 +40,25 @@ export async function authenticate(env: Env, rawKey: string | null): Promise<Aut
   }
   const q = await checkAndConsume(env.API_KEYS, keyHash, record.plan);
   if (!q.ok) {
+    // A metering failure is OUR fault, not the caller's, and a client library
+    // should treat it differently: 503 + Retry-After means "come back", 429
+    // means "you are over your limit". Collapsing them into 429 would tell an
+    // integrator to throttle their own usage over an outage on our side.
+    if (q.reason === "metering") {
+      return {
+        ok: false,
+        status: 503,
+        detail: "Usage metering is temporarily unavailable, so this request cannot be served. Retry shortly.",
+      };
+    }
     return {
       ok: false,
       status: 429,
       detail: q.reason === "quota"
         ? "Monthly quota exceeded. Bulk data is licensed separately: https://cars-data.com/en/api."
-        : "Rate limit exceeded — slow down and retry shortly.",
+        : q.reason === "daily"
+          ? "Daily request limit for this key reached. It resets at 00:00 UTC."
+          : "Rate limit exceeded — slow down and retry shortly.",
     };
   }
   return { ok: true, keyHash, record };
