@@ -44,6 +44,10 @@ export function recordRestCall(env: Env, route: string, locale: string, plan: st
 
 /** An MCP request turned away at the door. blob2 = why ("unauthorized" covers
  *  a missing, unknown, unapproved or revoked key; "quota" the key's limits). */
-export function recordMcpThrottled(env: Env, actor: string, reason: "unauthorized" | "quota"): void {
+// "unavailable" added 2026-10-03 with the fail-closed metering: a 503 is our
+// own outage and must be countable SEPARATELY from "quota", or the throttle
+// metric reports our failures as abuse by the caller — and the first person
+// to read it would go looking for an attacker that does not exist.
+export function recordMcpThrottled(env: Env, actor: string, reason: "unauthorized" | "quota" | "unavailable"): void {
   write(env, ["mcp-throttled", reason, "-", "-", actor || "-"]);
 }

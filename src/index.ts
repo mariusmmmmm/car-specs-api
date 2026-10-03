@@ -35,11 +35,19 @@ export default {
       const iph = await ipHash(request.headers.get("cf-connecting-ip") ?? "unknown", env.IP_HASH_SALT);
       const auth = await authenticate(env, readApiKey(request.headers, url));
       if (!auth.ok) {
-        recordMcpThrottled(env, iph, auth.status === 429 ? "quota" : "unauthorized");
-        const titles = { 401: "Unauthorized", 403: "Forbidden", 429: "Too Many Requests" } as const;
+        // 503 is a metering outage on OUR side, not a throttle on theirs — it
+        // must not be recorded as "quota", or the MCP throttle metric counts
+        // our own failures as abuse by the caller.
+        recordMcpThrottled(env, iph,
+          auth.status === 429 ? "quota" : auth.status === 503 ? "unavailable" : "unauthorized");
+        const titles = {
+          401: "Unauthorized", 403: "Forbidden",
+          429: "Too Many Requests", 503: "Service Unavailable",
+        } as const;
         const { body, status, headers } = problem(auth.status, titles[auth.status], auth.detail);
         const h: Record<string, string> = { ...headers };
         if (auth.status === 401) h["WWW-Authenticate"] = 'Bearer realm="cars-data.com API"';
+        if (auth.status === 503) h["Retry-After"] = "30";
         return new Response(JSON.stringify(body), { status, headers: h });
       }
       // Carry the hashed IP + UA + key prefix into the McpAgent DO via
