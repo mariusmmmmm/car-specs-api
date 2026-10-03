@@ -6,8 +6,8 @@ import { catalog } from "./catalog";
 import { variants } from "./variants";
 import { search } from "./search";
 import { compare } from "./compare";
+import { docs } from "./docs";
 import { keys } from "./keys";
-import { admin } from "./admin";
 import { usage } from "./usage";
 import { exportRoute } from "./export";
 import { requireApiKey } from "../middleware/auth";
@@ -27,8 +27,14 @@ v1.get("/health", async (c) => {
   );
 });
 v1.route("/keys", keys);
-// Owner-only, behind ADMIN_TOKEN (404 without it) — not part of the public API.
-v1.route("/admin", admin);
+
+// Documentation is public: a reference behind an API key only opens for
+// people who already got in. Mounted before requireApiKey for that reason.
+v1.route("/", docs);
+
+// Documentation is public: a reference behind an API key only opens for
+// people who already got in. Mounted before requireApiKey for that reason.
+v1.route("/", docs);
 
 // Everything else needs a Free (or later, paid) API key + counts against quota.
 const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();

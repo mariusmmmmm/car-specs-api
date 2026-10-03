@@ -39,6 +39,56 @@ tags:
     description: Gated; requires L0 clean provenance
 
 paths:
+  /keys:
+    post:
+      summary: Request a free API key
+      description: >-
+        Issues a key in the **pending** state. Since 2026-10-03 every free key
+        is reviewed by a human before it works, so the key you receive here
+        will return `403` until it is approved — that is expected, not a bug in
+        your client. The change followed an incident in which 133 keys minted
+        on temporary-email addresses pulled 109,770 calls in two days.
+        Approval is normally same-day; you are emailed when the key is active.
+      operationId: requestApiKey
+      tags: [keys]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, accept_tos]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: A real address — this is where the approval notice goes.
+                accept_tos:
+                  type: boolean
+                  description: "Must be true. Terms: https://cars-data.com/en/api/terms"
+      responses:
+        "201":
+          description: Key issued, awaiting approval.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      api_key:
+                        type: string
+                        description: Store this now; it is not retrievable later.
+                      status:
+                        type: string
+                        example: pending
+        "400":
+          description: Missing or malformed email, or accept_tos not true.
+        "503":
+          description: Key storage is temporarily unavailable. Retry shortly.
+
   /brands:
     get:
       tags: [catalog]

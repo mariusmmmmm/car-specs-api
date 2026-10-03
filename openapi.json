@@ -1,0 +1,1311 @@
+{
+  "components": {
+    "parameters": {
+      "BrandSlug": {
+        "in": "path",
+        "name": "slug",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Cursor": {
+        "description": "Opaque pagination token — pass back the `links.next` value from the previous page. Omit for the first page.",
+        "in": "query",
+        "name": "cursor",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Fields": {
+        "description": "Sparse fieldset, comma-separated",
+        "in": "query",
+        "name": "fields",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Limit": {
+        "description": "Page size, 1–50. Defaults to 50.",
+        "in": "query",
+        "name": "limit",
+        "schema": {
+          "default": 50,
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "Locale": {
+        "description": "One of the 19 supported languages. Defaults to `en`.",
+        "in": "query",
+        "name": "locale",
+        "schema": {
+          "default": "en",
+          "enum": [
+            "en",
+            "ro",
+            "fr",
+            "de",
+            "es",
+            "it",
+            "sr",
+            "hr",
+            "pt",
+            "pl",
+            "cs",
+            "sk",
+            "hu",
+            false,
+            "sv",
+            "el",
+            "bg",
+            "da",
+            "ar"
+          ],
+          "type": "string"
+        }
+      },
+      "Units": {
+        "in": "query",
+        "name": "units",
+        "schema": {
+          "default": "metric",
+          "enum": [
+            "metric",
+            "imperial"
+          ],
+          "type": "string"
+        }
+      },
+      "VariantId": {
+        "description": "variant_id == variants.public_id",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "type": "integer"
+        }
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description": "Not found"
+      }
+    },
+    "schemas": {
+      "Brand": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sameAs": {
+            "description": "Wikidata/Wikipedia links (T37 pattern), when available.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BrandEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Brand"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "BrandListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Brand"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "CompareEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/VariantSpecs"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "Generation": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "model_id": {
+            "type": "integer"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "year_end": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "year_start": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "GenerationListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Generation"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "ImageListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ImageRef"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "ImageRef": {
+        "properties": {
+          "url": {
+            "format": "uri",
+            "type": "string"
+          },
+          "variant": {
+            "enum": [
+              "card",
+              "hero"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Links": {
+        "properties": {
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Meta": {
+        "properties": {
+          "last_synced_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "units": {
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "last_synced_at"
+        ],
+        "type": "object"
+      },
+      "Model": {
+        "properties": {
+          "brand_id": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModelListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "PriceSnapshot": {
+        "description": "Single point-in-time snapshot. NOT a history series — label as_of.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "type": "string"
+          },
+          "price_eur": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "variant_id": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PriceSnapshotEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PriceSnapshot"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "ProblemDetail": {
+        "description": "RFC 9457 problem+json",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SearchResult": {
+        "properties": {
+          "brand_slug": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "generation_id": {
+            "description": "Generation this variant belongs to — disambiguates same-named variants across generations",
+            "type": "integer"
+          },
+          "model_slug": {
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "integer"
+          },
+          "year_from": {
+            "description": "Generation production start year",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "year_to": {
+            "description": "Generation production end year (null if still produced)",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SearchResultEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "SpecDefinition": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "group": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spec_key": {
+            "type": "string"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SpecDefinitionListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SpecDefinition"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "SpecValue": {
+        "description": "One resolved spec value from variant_doc.specs[spec_key]",
+        "properties": {
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "u": {
+            "description": "Unit, e.g. \"kW\", \"km/h\"",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "v": {
+            "description": "Native value (number/bool/string) or localized label at read-time"
+          }
+        },
+        "type": "object"
+      },
+      "Usage": {
+        "properties": {
+          "plan": {
+            "enum": [
+              "free",
+              "apify",
+              "x402"
+            ],
+            "type": "string"
+          },
+          "quota": {
+            "type": "integer"
+          },
+          "resets_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "used": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UsageEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "Variant": {
+        "properties": {
+          "accel_0_100_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "battery_kwh": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "body_type_en": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "fuel_slug": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "generation_id": {
+            "type": "integer"
+          },
+          "power_hp": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "price_new_eur": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "spec_count": {
+            "type": "integer"
+          },
+          "top_speed_kmh": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "torque_nm": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "variant_id": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "VariantEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Variant"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "VariantListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Variant"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "VariantSpecs": {
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "specs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SpecValue"
+            },
+            "type": "object"
+          },
+          "variant_id": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "VariantSpecsEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VariantSpecs"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "in": "header",
+        "name": "X-Api-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "name": "cars-data.com",
+      "url": "https://cars-data.com/api"
+    },
+    "description": "Read-only, cacheable, versioned API over cars-data.com's multilingual vehicle\ncatalog (102k+ variants, 1,300+ models, 5,299+ generations, 180 spec types,\n19 languages). Backed by the `variant_doc` read-model (see\nspecs/plans/BIZ-L2a-openapi-readmodel.md).\n\nPhase 1 scope: per-lookup reads only, Free tier requires attribution. Bulk\ndata is licensed separately as modular exports with optional updates —\nsee https://cars-data.com/en/api. See termsOfService.\n",
+    "license": {
+      "name": "Proprietary — see Terms of Service",
+      "url": "https://cars-data.com/en/api/terms"
+    },
+    "summary": "The car-specs API & MCP that AI agents call — generation-level, 19 languages, EV data.",
+    "termsOfService": "https://cars-data.com/en/api/terms",
+    "title": "cars-data.com API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/brands": {
+      "get": {
+        "operationId": "listBrands",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List all brands",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/brands/{slug}": {
+      "get": {
+        "operationId": "getBrand",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrandSlug"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Get one brand",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/brands/{slug}/models": {
+      "get": {
+        "operationId": "listBrandModels",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrandSlug"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List models for a brand",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/compare": {
+      "get": {
+        "operationId": "compare",
+        "parameters": [
+          {
+            "description": "2-4 variant IDs, comma-separated",
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "example": "1,2,3",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Side-by-side spec compare (reuses compare-picker.ts)",
+        "tags": [
+          "utilities"
+        ]
+      }
+    },
+    "/export": {
+      "get": {
+        "description": "Endpoint exists per the contract but is disabled/403 until L0 clean\nprovenance clears (see specs/plans/BIZ-L0-data-enrichment-clean-sourcing.md).\nDo not enable without a legal review pass beyond the Phase-1 ToS.\n",
+        "operationId": "exportVariants",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantListEnvelope"
+                }
+              }
+            },
+            "description": "(disabled) OK when ungated post-L0"
+          },
+          "403": {
+            "description": "Gated in Phase 1 — see description."
+          }
+        },
+        "summary": "Bulk/delta export (cursor-paginated) — GATED, disabled in Phase 1",
+        "tags": [
+          "enterprise"
+        ],
+        "x-phase1-gated": true
+      }
+    },
+    "/generations/{id}/variants": {
+      "get": {
+        "operationId": "listGenerationVariants",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List variants for a generation",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/keys": {
+      "post": {
+        "description": "Issues a key in the **pending** state. Since 2026-10-03 every free key is reviewed by a human before it works, so the key you receive here will return `403` until it is approved — that is expected, not a bug in your client. The change followed an incident in which 133 keys minted on temporary-email addresses pulled 109,770 calls in two days. Approval is normally same-day; you are emailed when the key is active.",
+        "operationId": "requestApiKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "accept_tos": {
+                    "description": "Must be true. Terms: https://cars-data.com/en/api/terms",
+                    "type": "boolean"
+                  },
+                  "email": {
+                    "description": "A real address — this is where the approval notice goes.",
+                    "format": "email",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "accept_tos"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "api_key": {
+                          "description": "Store this now; it is not retrievable later.",
+                          "type": "string"
+                        },
+                        "status": {
+                          "example": "pending",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Key issued, awaiting approval."
+          },
+          "400": {
+            "description": "Missing or malformed email, or accept_tos not true."
+          },
+          "503": {
+            "description": "Key storage is temporarily unavailable. Retry shortly."
+          }
+        },
+        "security": [],
+        "summary": "Request a free API key",
+        "tags": [
+          "keys"
+        ]
+      }
+    },
+    "/models/{id}/generations": {
+      "get": {
+        "operationId": "listModelGenerations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List generations for a model",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/search": {
+      "get": {
+        "operationId": "search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResultEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Typeahead search (reuses lib/server/search.ts)",
+        "tags": [
+          "utilities"
+        ]
+      }
+    },
+    "/specs/catalog": {
+      "get": {
+        "operationId": "getSpecsCatalog",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecDefinitionListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "The 180 spec definitions + units + metadata",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/usage": {
+      "get": {
+        "operationId": "getUsage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Self-check current key's usage against its plan quota",
+        "tags": [
+          "utilities"
+        ]
+      }
+    },
+    "/variants": {
+      "get": {
+        "operationId": "filterVariants",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "in": "query",
+            "name": "fuel",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "body",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "power_min",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "power_max",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "price_max",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "drive",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ev",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Filter variants",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}": {
+      "get": {
+        "operationId": "getVariant",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          },
+          {
+            "$ref": "#/components/parameters/Units"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Full specs for one variant (language-neutral)",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}/images": {
+      "get": {
+        "operationId": "getVariantImages",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Image URLs for a variant (own CDN, no attribution burden)",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}/prices": {
+      "get": {
+        "operationId": "getVariantPrices",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceSnapshotEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Current price snapshot (labeled snapshot, not history — single 2026-05-10 dataset)",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}/specs": {
+      "get": {
+        "operationId": "getVariantSpecs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Units"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantSpecsEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "402": {
+            "description": "x402 payment required. Only returned when calling without an API\nkey and X402_ENABLED=true (Phase 1 §6 — this is the ONLY endpoint\ngated by x402). Standard API-key requests never see this.\n"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Localized specs for one variant — the headline differentiator (19 languages)",
+        "tags": [
+          "variants"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Production",
+      "url": "https://api.cars-data.com/v1"
+    },
+    {
+      "description": "Local dev (wrangler dev, Hyperdrive localConnectionString -> cars_v3)",
+      "url": "http://localhost:8790/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Brands, models, generations — cheap, very long cache",
+      "name": "catalog"
+    },
+    {
+      "description": "The \"money\" endpoints",
+      "name": "variants"
+    },
+    {
+      "description": "Search and compare",
+      "name": "utilities"
+    },
+    {
+      "description": "Gated; requires L0 clean provenance",
+      "name": "enterprise"
+    }
+  ]
+}
