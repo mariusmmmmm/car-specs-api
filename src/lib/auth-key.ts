@@ -58,7 +58,12 @@ export async function authenticate(env: Env, rawKey: string | null): Promise<Aut
         ? "Monthly quota exceeded. Bulk data is licensed separately: https://cars-data.com/en/api."
         : q.reason === "daily"
           ? "Daily request limit for this key reached. It resets at 00:00 UTC."
-          : "Rate limit exceeded — slow down and retry shortly.",
+          : q.reason === "global"
+            // Says plainly that the caller did nothing wrong. Hiding a
+            // service-wide ceiling behind "slow down" would send an integrator
+            // hunting a bug in their own client.
+            ? "The service-wide daily limit for free catalogue access has been reached — this is not a limit on your key. It resets at 00:00 UTC. Licensed exports are not rate-limited: https://cars-data.com/en/api."
+            : "Rate limit exceeded — slow down and retry shortly.",
     };
   }
   return { ok: true, keyHash, record };

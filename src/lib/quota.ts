@@ -1,4 +1,4 @@
-export type Plan = "free" | "apify";
+export type Plan = "free" | "demo" | "apify";
 
 // Apify usage is metered/billed through Apify's own pay-per-event platform
 // (BIZ-L2b §2), not our Free-tier quota — this cap exists only as a backstop
@@ -16,10 +16,37 @@ export type Plan = "free" | "apify";
 // integration test or a day of real development completely untouched: measured
 // legitimate traffic is ~225 calls/day ACROSS THE WHOLE API, and the busiest
 // legitimate day on record is 1.245 REST calls spread over all keys.
+//
+// `demo` added 2026-10-04 (T92). Its real limit is not here: a demo key can
+// only ever resolve the 40 variants in lib/demo-set.ts, served pre-rendered
+// from KV, so no number in this table protects the catalogue — the allowlist
+// does. What is left for a demo key to protect is the database and our own
+// tidiness, so it keeps a minute limit and generous day/month ceilings that a
+// real evaluation will never notice.
 const QUOTAS: Record<Plan, { monthly: number; daily: number; perMinute: number }> = {
   free: { monthly: 1000, daily: 200, perMinute: 20 },
+  demo: { monthly: 20_000, daily: 2_000, perMinute: 10 },
   apify: { monthly: 100_000, daily: 10_000, perMinute: 120 },
 };
+
+// The service-wide ceiling on catalogue reads (T92 M1) — the ONLY layer that a
+// new credential cannot defeat by existing. Per-key caps provably do not bound
+// a GROUP: on 30–31 August 139 keys each stayed inside its own monthly cap and
+// together pulled 85–99% of the catalogue. This counter does not care how many
+// keys there are, who holds them, or whether the per-key counter is accurate.
+//
+// 5.000/day = 4,0x the busiest LEGITIMATE day on record (1.245 REST calls
+// across every key, 2026-09-16) and 7,5% of 31 August (66.774). At this rate
+// the full catalogue costs 21 days of monopolising the entire free tier, and
+// the monopolising is itself the alarm.
+//
+// Exempt, deliberately:
+//   * `demo` — scoped to 40 variants and served from KV, so it cannot spend
+//     catalogue exposure. Counting it would let discovery probes exhaust the
+//     budget that protects the catalogue, which is backwards.
+//   * `apify` — metered and billed by Apify's own platform (BIZ-L2b §2).
+export const GLOBAL_DAILY_CATALOGUE_READS = 5_000;
+const GLOBAL_COUNTED_PLANS: ReadonlySet<Plan> = new Set<Plan>(["free"]);
 
 function monthBucket(d = new Date()): string {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -39,27 +66,53 @@ export function resetsAt(d = new Date()): string {
 
 export type QuotaResult =
   | { ok: true; used: number; quota: number }
-  | { ok: false; reason: "quota" | "daily" | "rate" | "metering"; used: number; quota: number };
+  | { ok: false; reason: "quota" | "daily" | "rate" | "metering" | "global"; used: number; quota: number };
 
-// Non-atomic get-then-put: acceptable for a KV-backed scaffold per BIZ-L2a §3
-// ("keys/rate-limit ... in Workers KV") — under heavy concurrent bursts this
-// can slightly overcount past the limit. A Durable Object would give exact
-// counting. Measured against the worst day on record it was never the weak
+// Non-atomic get-then-put, and MEASURED TO LOSE ABOUT HALF ITS INCREMENTS.
+//
+// The note that stood here until 2026-10-04 said the cap "was never the weak
 // point: KV absorbed 133.548 writes in a day without a miss, and no key
-// exceeded its cap. The weak point was that a failed write served the request
-// anyway — see below.
+// exceeded its cap." That read the wrong number. The 987-of-1000 figure it
+// rested on came from Analytics Engine, i.e. TRAFFIC; the enforcement counters
+// themselves were read out of KV on 2026-10-04, for 138 of the 139 keys of the
+// August extraction, and say something else:
+//
+//   counters summed          53.952
+//   requests actually served >=93.986  (Analytics Engine raw rows, a floor)
+//   loss                     >=42,6%   (median 0,526 per key, min 0,410)
+//
+// The key whose traffic read 987 had a counter of 383. So "1.000/month" is in
+// practice 1.350–2.440 served calls, and the factor is not constant, so it
+// cannot be compensated by dividing. The same applies to `daily`.
+//
+// The cap never mattered in August only because nobody came near it: the
+// extraction stopped when the CATALOGUE ran out (87.600–102.292 spec reads
+// against 103.099 variants), not when a limit bit.
+//
+// Consequence, and the reason T92 exists: an exact per-key cap needs atomic
+// counting (one Durable Object per key — $0 at this volume), and until then the
+// layer that actually bounds exposure is the service-wide ceiling below plus
+// the demo allowlist, neither of which depends on counting being right.
 export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: Plan): Promise<QuotaResult> {
   const { monthly, daily, perMinute } = QUOTAS[plan];
   const monthlyKey = `usage:${keyHash}:${monthBucket()}`;
   const dailyKey = `daily:${keyHash}:${dayBucket()}`;
   const minuteKey = `rl:${keyHash}:${minuteBucket()}`;
+  const counted = GLOBAL_COUNTED_PLANS.has(plan);
+  const globalKey = `global:${dayBucket()}`;
 
-  let monthlyUsed: number, dailyUsed: number, minuteUsed: number;
+  let monthlyUsed: number, dailyUsed: number, minuteUsed: number, globalUsed: number;
   try {
-    const [m, d, r] = await Promise.all([kv.get(monthlyKey), kv.get(dailyKey), kv.get(minuteKey)]);
+    const [m, d, r, g] = await Promise.all([
+      kv.get(monthlyKey),
+      kv.get(dailyKey),
+      kv.get(minuteKey),
+      counted ? kv.get(globalKey) : Promise.resolve(null),
+    ]);
     monthlyUsed = Number(m ?? 0);
     dailyUsed = Number(d ?? 0);
     minuteUsed = Number(r ?? 0);
+    globalUsed = Number(g ?? 0);
   } catch (e) {
     // A read we cannot do is a count we do not have. Same rule as the write
     // below: refuse rather than guess.
@@ -67,6 +120,12 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: Pl
     return { ok: false, reason: "metering", used: 0, quota: monthly };
   }
 
+  // The service-wide ceiling is checked FIRST and on purpose: it is the only
+  // limit that still means something when every per-key number has been
+  // defeated by minting more keys.
+  if (counted && globalUsed >= GLOBAL_DAILY_CATALOGUE_READS) {
+    return { ok: false, reason: "global", used: globalUsed, quota: GLOBAL_DAILY_CATALOGUE_READS };
+  }
   if (monthlyUsed >= monthly) {
     return { ok: false, reason: "quota", used: monthlyUsed, quota: monthly };
   }
@@ -97,6 +156,9 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: Pl
       kv.put(monthlyKey, String(monthlyUsed + 1), { expirationTtl: 60 * 60 * 24 * 35 }),
       kv.put(dailyKey, String(dailyUsed + 1), { expirationTtl: 60 * 60 * 36 }),
       kv.put(minuteKey, String(minuteUsed + 1), { expirationTtl: 70 }),
+      ...(counted
+        ? [kv.put(globalKey, String(globalUsed + 1), { expirationTtl: 60 * 60 * 36 })]
+        : []),
     ]);
   } catch (e) {
     console.error("metering KV put failed — refusing the request:", e);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { checkAndConsume, PLAN_QUOTAS } from "./quota";
+import { checkAndConsume, PLAN_QUOTAS, GLOBAL_DAILY_CATALOGUE_READS } from "./quota";
 
 /**
  * A KV stub that can be told to break. The point of these tests is not that
@@ -87,5 +87,71 @@ describe("daily cap — how FAST a key may spend its month", () => {
     const { kv } = fakeKv({ seed: { [`usage:${HASH}:${month}`]: String(PLAN_QUOTAS.free.monthly) } });
     const r = await checkAndConsume(kv, HASH, "free");
     expect(r.ok === false && r.reason).toBe("quota");
+  });
+});
+
+// ── T92: the service-wide ceiling ───────────────────────────────────────────
+const TODAY = new Date().toISOString().slice(0, 10);
+
+describe("service-wide daily ceiling (T92 M1)", () => {
+  // Per-key caps provably do not bound a GROUP. On 30–31 August every one of
+  // 139 keys stayed inside its own cap and the catalogue left anyway. This is
+  // the only limit a new credential cannot defeat by existing.
+  test("a free key is refused at the ceiling even with its own quota untouched", async () => {
+    const { kv } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS) } });
+    const r = await checkAndConsume(kv, HASH, "free");
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.reason).toBe("global");
+  });
+
+  test("ten FRESH keys share one ceiling — three get served, seven do not", async () => {
+    const { kv } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS - 3) } });
+    const out = [];
+    for (let i = 0; i < 10; i++) out.push(await checkAndConsume(kv, `fresh-${i}`, "free"));
+    expect(out.filter((r) => r.ok).length).toBe(3);
+    expect(out.filter((r) => r.ok === false && r.reason === "global").length).toBe(7);
+  });
+
+  test("demo traffic is exempt — a key scoped to 40 cars cannot spend catalogue budget", async () => {
+    const { kv, puts } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS + 500) } });
+    const r = await checkAndConsume(kv, HASH, "demo");
+    expect(r.ok).toBe(true);
+    // and it must not top up the counter it is exempt from
+    expect(puts.filter((k) => k.startsWith("global:")).length).toBe(0);
+  });
+
+  test("apify traffic is exempt — Apify meters and bills it", async () => {
+    const { kv } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS + 500) } });
+    const r = await checkAndConsume(kv, HASH, "apify");
+    expect(r.ok).toBe(true);
+  });
+
+  test("a served free request increments the shared counter", async () => {
+    const { kv, store } = fakeKv();
+    await checkAndConsume(kv, "key-a", "free");
+    await checkAndConsume(kv, "key-b", "free");
+    expect(store.get(`global:${TODAY}`)).toBe("2");
+  });
+
+  test("the ceiling is checked before the per-key caps, so the reason is honest", async () => {
+    // A key that is BOTH over its own daily cap and past the global ceiling
+    // must be told about the ceiling: otherwise an integrator reads "your key
+    // is over its limit" and goes looking for a bug in their own client.
+    const { kv } = fakeKv({
+      seed: {
+        [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS),
+        [`daily:${HASH}:${TODAY}`]: String(PLAN_QUOTAS.free.daily),
+      },
+    });
+    const r = await checkAndConsume(kv, HASH, "free");
+    expect(r.ok === false && r.reason).toBe("global");
+  });
+
+  test("demo keeps a minute limit — the DB still needs protecting", async () => {
+    const minute = Math.floor(Date.now() / 60_000);
+    const { kv } = fakeKv({ seed: { [`rl:${HASH}:${minute}`]: String(PLAN_QUOTAS.demo.perMinute) } });
+    const r = await checkAndConsume(kv, HASH, "demo");
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.reason).toBe("rate");
   });
 });
