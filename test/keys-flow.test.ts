@@ -36,7 +36,7 @@ const request = (body: unknown, ip = "1.1.1.1") =>
 const adminCall = (path: string, method = "GET", token = "secret-admin") =>
   app.request(`/v1/admin${path}`, { method, headers: { Authorization: `Bearer ${token}` } }, env, ctx);
 
-const valid = { email: "dev@example.com", name: "Dev", use_case: "Comparison site for EVs in France, public, ad-funded.", accept_tos: true };
+const valid = { email: "dev@example.com", name: "Dev", company: "EV Compare", website: "evcompare.fr", role: "Developer", use_case: "Comparison site for EVs in France, public, ad-funded.", accept_tos: true };
 
 beforeEach(() => {
   const f = fakeKv();
@@ -62,6 +62,22 @@ describe("key requests", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe("owner@example.com");
     expect(sent[0].text).toContain("keys-admin.mjs approve");
+  });
+
+  it("requires company, website and role (T90)", async () => {
+    expect((await request({ ...valid, company: "" })).status).toBe(400);
+    expect((await request({ ...valid, website: undefined })).status).toBe(400);
+    expect((await request({ ...valid, website: "not a site" })).status).toBe(400);
+    expect((await request({ ...valid, website: "javascript:alert(1)" })).status).toBe(400);
+    expect((await request({ ...valid, role: " " })).status).toBe(400);
+  });
+
+  it("stores the website normalised and shows all three to the owner", async () => {
+    expect((await request(valid)).status).toBe(202);
+    const rec = JSON.parse(store.get([...store.keys()].find((k) => k.startsWith("keyreq:"))!)!);
+    expect(rec).toMatchObject({ company: "EV Compare", website: "https://evcompare.fr", role: "Developer" });
+    expect(sent[0].text).toContain("Website: https://evcompare.fr");
+    expect(sent[0].text).toContain("Role:    Developer");
   });
 
   it("rejects a request without a real use case", async () => {

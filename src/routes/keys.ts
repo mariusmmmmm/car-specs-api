@@ -42,6 +42,23 @@ keys.use("*", async (c, next) => {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
+// "clearfly.co.uk" is a fine answer, so a missing scheme is added rather than
+// refused. What must hold: http(s), a dotted hostname, nothing else. Returns
+// the normalised URL or null.
+export function normaliseWebsite(raw: string): string | null {
+  if (!raw || /\s/.test(raw)) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let u: URL;
+  try {
+    u = new URL(withScheme);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(u.hostname)) return null;
+  return `${u.protocol}//${u.hostname}${u.pathname === "/" ? "" : u.pathname}`;
+}
+
 // POST /v1/keys — no longer hands out a key (T73, owner decision 2026-10-02).
 // It records a request; the owner approves it by hand (scripts/keys-admin.mjs)
 // and the key is emailed to the requester. Self-issued keys were how the
@@ -50,7 +67,9 @@ keys.post("/", async (c) => {
   const p = await c.req.json().catch(() => null);
   const email = str(p?.email, 254).toLowerCase();
   const name = str(p?.name, 120);
-  const company = str(p?.company, 120) || null;
+  const company = str(p?.company, 120);
+  const website = normaliseWebsite(str(p?.website, 200));
+  const role = str(p?.role, 80);
   const useCase = str(p?.use_case, 2000);
 
   const bad = (detail: string) => {
@@ -59,6 +78,11 @@ keys.post("/", async (c) => {
   };
   if (!EMAIL_RE.test(email)) return bad("A valid `email` is required — the key is sent there after review.");
   if (name.length < 2) return bad("`name` is required.");
+  // Required since T90 (owner, 2026-10-04): with only a name and a use case
+  // there was nothing to check a request against before approving it.
+  if (company.length < 2) return bad("`company` is required — the organisation the key is for (your own name if you are independent).");
+  if (!website) return bad("`website` is required — the site or app the data will be used in, e.g. https://example.com.");
+  if (role.length < 2) return bad("`role` is required — your role there, e.g. developer, CTO, founder.");
   if (useCase.length < 20) return bad("`use_case` is required (at least 20 characters) — keys are reviewed by hand.");
   if (p?.accept_tos !== true) return bad("`accept_tos: true` is required — see https://cars-data.com/en/api/terms.");
 
@@ -90,6 +114,8 @@ keys.post("/", async (c) => {
     email,
     name,
     company,
+    website,
+    role,
     use_case: useCase,
     tos_version: TOS_VERSION,
     tos_accepted_at: now,
@@ -111,10 +137,10 @@ keys.post("/", async (c) => {
   // also emails the owner), and only if that fails, an email straight from
   // here — never both, so a request is never announced twice. The raw IP is
   // not passed on; the table gets the same hash KV keeps.
-  const subject = `Key request ${req.id} — ${company ?? name}`;
+  const subject = `Key request ${req.id} — ${company}`;
   const text =
     `New API key request — waiting for your approval.\n\n` +
-    `Request: ${req.id}\nName:    ${name}\nEmail:   ${email}\nCompany: ${company ?? "—"}\n\n` +
+    `Request: ${req.id}\nName:    ${name}\nRole:    ${role}\nEmail:   ${email}\nCompany: ${company}\nWebsite: ${website}\n\n` +
     `Use case:\n${useCase}\n\n` +
     `Approve: node scripts/keys-admin.mjs approve ${req.id}\n` +
     `Reject:  node scripts/keys-admin.mjs reject ${req.id}\n`;
@@ -126,7 +152,7 @@ keys.post("/", async (c) => {
         email,
         subject,
         message: text,
-        meta: { request_id: req.id, company, tos_version: TOS_VERSION, ip_hash: iph },
+        meta: { request_id: req.id, company, website, role, tos_version: TOS_VERSION, ip_hash: iph },
       });
       if (!stored && c.env.NOTIFY_TO) {
         await sendEmail(c.env, { to: c.env.NOTIFY_TO, replyTo: email, subject: `[cars-data API] ${subject}`, text });

@@ -49,7 +49,8 @@ switch (cmd) {
     const rows = await call("GET", `/requests?status=${arg ?? "pending"}`);
     if (!rows.length) console.log("No requests.");
     for (const r of rows) {
-      console.log(`\n${r.id}  ${r.status}  ${r.created_at.slice(0, 16)}  ${r.name} <${r.email}>  ${r.company ?? ""}`);
+      console.log(`\n${r.id}  ${r.status}  ${r.created_at.slice(0, 16)}  ${r.name} <${r.email}>`);
+      console.log(`  ${r.role ?? "—"} @ ${r.company ?? "—"}  ${r.website ?? ""}`);
       console.log(`  ${r.use_case.replace(/\n/g, "\n  ")}`);
     }
     break;

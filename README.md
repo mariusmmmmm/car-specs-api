@@ -70,7 +70,7 @@ emailed to you.
 ```bash
 curl -X POST https://api.cars-data.com/v1/keys \
   -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "name": "Your Name", "use_case": "What you are building, in a sentence or two", "accept_tos": true}'
+  -d '{"email": "you@example.com", "name": "Your Name", "company": "Your company", "website": "https://example.com", "role": "Developer", "use_case": "What you are building, in a sentence or two", "accept_tos": true}'
 ```
 
 Returns `202 pending_review`. Free tier: 1,000 requests/month, 20 req/min,

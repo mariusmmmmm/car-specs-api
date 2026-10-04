@@ -35,7 +35,11 @@ export type KeyRequest = {
   id: string;
   email: string;
   name: string;
+  // company/website/role are required since T90 (2026-10-04); requests made
+  // before that may lack website/role and have company null.
   company: string | null;
+  website?: string;
+  role?: string;
   use_case: string;
   tos_version: string;
   tos_accepted_at: string;
