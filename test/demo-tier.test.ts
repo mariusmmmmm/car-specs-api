@@ -25,7 +25,8 @@ function variant(id: number, over: Partial<Record<string, unknown>> = {}) {
     brand: "Volkswagen", model: "Golf", generation: "Golf VII",
     display_name: `Volkswagen Golf ${String.fromCharCode(65 + (id % 26))} TSI`, fuel: "Petrol", body_type: "Hatchback",
     years: "2012–2019", power_hp: 110, battery_kwh: null, price_new_eur: 24990,
-    specs: [{ key: "length_mm", label: "Length", value: "4258 mm", category: "exterior_sizes" }],
+    // Same shape localizeVariantSpecs() returns: a record keyed by spec key.
+    specs: { length_mm: { label: "Length", value: "4258 mm", unit: "mm", confidence: 0.9 } },
     images: [{ url: "https://cdn.example/x.jpg", variant: "hero" }],
     ...over,
   };
@@ -75,7 +76,7 @@ describe("demo tier — served from KV, never from Postgres (T92)", () => {
     const res = await call(`/variants/${token}/specs`);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data.specs[0].value).toBe("4258 mm");
+    expect(body.data.specs.length_mm.value).toBe("4258 mm");
   });
 
   test("photos are IN the demo", async () => {

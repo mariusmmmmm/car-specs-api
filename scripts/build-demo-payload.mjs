@@ -33,11 +33,12 @@ import { fileURLToPath } from "node:url";
 //   npx tsc -p tsconfig.build-scripts.json
 const require_ = createRequire(import.meta.url);
 const BUILD = "../.tsbuild/lib";
-let localizeVariantSpecs, getVariantImages, DEMO_VARIANT_IDS, DEMO_SET_SIZE, DEMO_SET_DESCRIPTION, demoSetReady;
+let localizeVariantSpecs, getVariantImages, DEMO_VARIANT_IDS, DEMO_SET_SIZE, DEMO_SET_DESCRIPTION, demoSetReady, SUPPORTED_LOCALES;
 try {
   ({ localizeVariantSpecs } = require_(`${BUILD}/localize-variant.js`));
   ({ getVariantImages } = require_(`${BUILD}/queries.js`));
   ({ DEMO_VARIANT_IDS, DEMO_SET_SIZE, DEMO_SET_DESCRIPTION, demoSetReady } = require_(`${BUILD}/demo-set.js`));
+  ({ SUPPORTED_LOCALES } = require_(`${BUILD}/locale.js`));
 } catch (e) {
   console.error(`Compiled libs missing (${e.code ?? e.message}).\nRun: npx tsc -p tsconfig.build-scripts.json`);
   process.exit(1);
@@ -50,9 +51,11 @@ const PUT = process.argv.includes("--put");
 const ONE = process.argv.includes("--locale") ? process.argv[process.argv.indexOf("--locale") + 1] : null;
 const KV_NAMESPACE = "4bfd13f1489b4e1482f441f4fcf33a3f"; // API_KEYS, per wrangler.toml
 
-// The 20 SEO locales. Kept here rather than imported from v3 because this repo
-// does not depend on that one; the guard in v3 is what keeps the two in step.
-const LOCALES = "en de fr es it nl pl pt ro cs hu sk bg hr sl sr el tr ar no".split(" ");
+// DERIVED from the Worker's own list, never retyped. The first draft of this
+// script carried a hand-written list that included `nl` — a locale the site
+// deliberately never publishes — and omitted `sv` and `da`. A blob built from
+// it would have been a fourth place these 20 strings are written down.
+const LOCALES = [...SUPPORTED_LOCALES];
 
 function pipelineIsRunning() {
   try {
@@ -118,16 +121,16 @@ for (const locale of ONE ? [ONE] : LOCALES) {
       power_hp: r.power_hp,
       battery_kwh: r.battery_kwh !== null ? Number(r.battery_kwh) : null,
       price_new_eur: r.price_new_eur,
-      specs: (localized?.specs ?? []).map((s) => ({
-        key: s.key, label: s.label, value: s.value, category: s.category,
-      })),
+      // VERBATIM. Reshaping here is how the demo's response shape would drift
+      // from the live API's.
+      specs: localized?.specs ?? {},
       images: (images[Number(r.variant_id)] ?? []).map((i) => ({
         url: i.cdn_url, variant: i.role === "hero" ? "hero" : "card",
       })),
     });
   }
 
-  const emptySpecs = variants.filter((v) => v.specs.length === 0);
+  const emptySpecs = variants.filter((v) => Object.keys(v.specs).length === 0);
   if (emptySpecs.length) {
     console.error(`! ${locale}: ${emptySpecs.length} variants have NO localised specs — a demo blob with empty cars is worse than no demo. Not writing ${locale}.`);
     continue;
@@ -144,7 +147,7 @@ for (const locale of ONE ? [ONE] : LOCALES) {
   fs.writeFileSync(file, JSON.stringify(payload));
   const kb = (fs.statSync(file).size / 1024).toFixed(0);
   built.push({ locale, file, kb });
-  console.log(`  ${locale}: ${variants.length} variants, ${variants.reduce((n, v) => n + v.specs.length, 0)} spec values, ${kb} KB`);
+  console.log(`  ${locale}: ${variants.length} variants, ${variants.reduce((n, v) => n + Object.keys(v.specs).length, 0)} spec values, ${kb} KB`);
 }
 
 await sql.end();

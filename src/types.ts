@@ -38,6 +38,11 @@ export type McpProps = {
   ua?: string;
   /** First 8 hex chars of the authenticated key's hash — telemetry actor. */
   keyPrefix?: string;
+  /** True for an anonymous caller on the demo scope (T92 D9). No key, no
+   *  database connection: the tools are answered from the pre-rendered blob. */
+  demo?: boolean;
+  /** Locale the blob should be read in, when `demo`. */
+  locale?: string;
 };
 
 export type Variables = {

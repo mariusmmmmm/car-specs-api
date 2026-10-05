@@ -2,11 +2,11 @@ openapi: 3.1.0
 info:
   title: cars-data.com API
   version: "1.0.0"
-  summary: The car-specs API & MCP that AI agents call — generation-level, 19 languages, EV data.
+  summary: The car-specs API & MCP that AI agents call — generation-level, 20 languages, EV data.
   description: |
     Read-only, cacheable, versioned API over cars-data.com's multilingual vehicle
-    catalog (102k+ variants, 1,300+ models, 5,299+ generations, 180 spec types,
-    19 languages). Backed by the `variant_doc` read-model (see
+    catalog (103,099 variants, 1,300+ models, 5,395 generations, 224 spec types,
+    20 languages). Backed by the `variant_doc` read-model (see
     specs/plans/BIZ-L2a-openapi-readmodel.md).
 
     Phase 1 scope: per-lookup reads only, Free tier requires attribution. Bulk
@@ -137,7 +137,7 @@ paths:
   /specs/catalog:
     get:
       tags: [catalog]
-      summary: The 180 spec definitions + units + metadata
+      summary: The 224 spec definitions + units + metadata
       operationId: getSpecsCatalog
       parameters:
         - $ref: '#/components/parameters/Locale'
@@ -172,7 +172,7 @@ paths:
   /variants/{id}/specs:
     get:
       tags: [variants]
-      summary: Localized specs for one variant — the headline differentiator (19 languages)
+      summary: Localized specs for one variant — the headline differentiator (20 languages)
       operationId: getVariantSpecs
       parameters:
         - $ref: '#/components/parameters/VariantId'

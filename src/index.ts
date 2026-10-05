@@ -4,6 +4,7 @@ import { v1 } from "./routes/v1";
 import { problem } from "./lib/response";
 import { CarsDataMCP } from "./mcp";
 import { authenticate, readApiKey } from "./lib/auth-key";
+import { checkAnonDemoRate } from "./lib/quota";
 import { ipHash, recordMcpThrottled } from "./lib/usage";
 import type { McpProps } from "./types";
 
@@ -33,7 +34,37 @@ export default {
       // on what one machine could pull. Same gate, same quota as REST; the key
       // comes as X-Api-Key or Authorization: Bearer (what MCP clients send).
       const iph = await ipHash(request.headers.get("cf-connecting-ip") ?? "unknown", env.IP_HASH_SALT);
-      const auth = await authenticate(env, readApiKey(request.headers, url));
+      const presented = readApiKey(request.headers, url);
+
+      // NO KEY AT ALL → the demo scope, anonymously (T92 D9). Scoped to the
+      // 40-car blob and answered without a database connection, so T73's
+      // reason for demanding a key here — "no ceiling on what one machine
+      // could pull" — is structurally satisfied instead of enforced.
+      //
+      // A key that is PRESENT but invalid, unapproved, revoked or over quota
+      // still gets its 401/403/429. Quietly downgrading such a caller to the
+      // demo would hide a revoked key behind working-looking answers, which is
+      // the worst of both: they think they have access and we think we stopped
+      // them.
+      if (!presented) {
+        const gate = await checkAnonDemoRate(env.API_KEYS, iph);
+        if (!gate.ok) {
+          recordMcpThrottled(env, iph, "quota");
+          const { body, status, headers } = gate.reason === "rate"
+            ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute. A free reviewed key raises this: https://cars-data.com/en/api/for-ai-agents")
+            : problem(503, "Service Unavailable", "Request metering is temporarily unavailable. Retry shortly.");
+          return new Response(JSON.stringify(body), { status, headers: { ...headers, "Retry-After": "60" } });
+        }
+        const props: McpProps = {
+          ipHash: iph,
+          ua: request.headers.get("user-agent") ?? undefined,
+          demo: true,
+        };
+        (ctx as ExecutionContext & { props?: McpProps }).props = props;
+        return CarsDataMCP.serve("/mcp").fetch(request, env, ctx);
+      }
+
+      const auth = await authenticate(env, presented);
       if (!auth.ok) {
         // 503 is a metering outage on OUR side, not a throttle on theirs — it
         // must not be recorded as "quota", or the MCP throttle metric counts

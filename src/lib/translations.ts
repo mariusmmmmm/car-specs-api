@@ -2,7 +2,7 @@ import type postgres from "postgres";
 
 type Sql = ReturnType<typeof postgres>;
 
-// 180 spec labels x 19 locales + 4 enum groups x ~4-8 values x 19 locales:
+// 224 spec labels x 20 locales + 4 enum groups x ~4-8 values x 20 locales:
 // a few thousand rows, small enough to hold whole in the Worker isolate's
 // memory and refresh on a TTL, per BIZ-L2a-openapi-readmodel.md §1.
 type TranslationCache = {

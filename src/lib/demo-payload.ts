@@ -30,8 +30,14 @@ export type DemoVariant = {
   power_hp: number | null;
   battery_kwh: number | null;
   price_new_eur: number | null;
-  /** Every spec the variant carries, already localised for this blob's locale. */
-  specs: { key: string; label: string; value: string; category: string }[];
+  /** Every spec the variant carries, localised for this blob's locale, in the
+   *  EXACT shape localizeVariantSpecs() returns — a record keyed by spec key,
+   *  not a list. The first draft used a list, which would have shipped a demo
+   *  whose response SHAPE differed from the live API's: a client that worked
+   *  against the demo would break on its first call with a reviewed key. The
+   *  generator now stores the function's output verbatim, so there is nothing
+   *  to keep in step. */
+  specs: Record<string, { label: string; value: unknown; unit: string | null; confidence: number | null }>;
   images: { url: string; variant: "hero" | "card" }[];
 };
 

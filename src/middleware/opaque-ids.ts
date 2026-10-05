@@ -15,21 +15,24 @@ import { encodeId, decodeId, type IdKind } from "../lib/public-id";
 // response that hid the ids and published the cursor would hand back one id per
 // page anyway.
 
-const KEY_KIND: Record<string, IdKind> = {
+export const ID_FIELD_KIND: Record<string, IdKind> = {
   variant_id: "variant",
   generation_id: "generation",
   model_id: "model",
 };
 
 /** Walks the body once. Arrays and nested objects included, because list
- *  endpoints nest rows under `data` and `/v1/compare` nests per-variant blocks. */
-async function encodeTree(secret: string | undefined, node: unknown): Promise<unknown> {
+ *  endpoints nest rows under `data` and `/v1/compare` nests per-variant blocks.
+ *  Exported because /mcp needs the SAME field list — the MCP surface used to
+ *  hand back raw public_id values, outside this gate entirely. One table of
+ *  field names, two surfaces. */
+export async function encodeTree(secret: string | undefined, node: unknown): Promise<unknown> {
   if (Array.isArray(node)) return Promise.all(node.map((n) => encodeTree(secret, n)));
   if (node === null || typeof node !== "object") return node;
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    const kind = KEY_KIND[key];
+    const kind = ID_FIELD_KIND[key];
     if (kind && typeof value === "number") {
       out[key] = await encodeId(secret, kind, value);
     } else if (kind && value === null) {

@@ -1,8 +1,8 @@
 # cars-data.com — Car Specs API + MCP server
 
 REST API and remote MCP server over cars-data.com's multilingual vehicle-specs
-database: **102,191 vehicle variants**, **1,300+ models**, **5,299 generations**,
-**180 spec types across 19 categories**, in **19 languages**
+database: **103,099 vehicle variants**, **1,300+ models**, **5,395 generations**,
+**224 spec types defined** (163 present in the data), in **20 languages**
 (including Arabic, RTL).
 
 - REST API: `https://api.cars-data.com/v1`
@@ -30,8 +30,8 @@ Tools exposed:
 
 | Tool | What it does |
 |---|---|
-| `search_cars` | Free-text search across 102,191 variants, 116 brands, 19 languages |
-| `get_specs` | Full localized specs for one variant — 180 spec types across 19 categories (safety, comfort/interior, engine & fuel, performance, EV/hybrid, chassis, exterior, dimensions & weights, WLTP/NEDC consumption, and more), with a confidence score and `last_synced_at` freshness timestamp |
+| `search_cars` | Free-text search across 103,099 variants, 119 brands, 20 languages |
+| `get_specs` | Full localized specs for one variant — 224 spec types across 21 categories (safety, comfort/interior, engine & fuel, performance, EV/hybrid, chassis, exterior, dimensions & weights, WLTP/NEDC consumption, and more), with a confidence score and `last_synced_at` freshness timestamp |
 | `compare_variants` | Side-by-side localized specs for 2-4 variants |
 | `list_generations` | Generations/facelifts of a model, with production years |
 | `filter_cars` | Structured filter: fuel, body, drive, power/price range, year, EV-only |
@@ -54,7 +54,7 @@ curl https://api.cars-data.com/v1/variants/42164/specs?locale=de \
 | `GET /models/{id}/generations` | Generations for a model |
 | `GET /generations/{id}/variants` | Variants for a generation |
 | `GET /variants`, `/variants/{id}` | Filterable variant listing / single variant |
-| `GET /variants/{id}/specs?locale=` | Full localized specs (180 types, 19 languages) |
+| `GET /variants/{id}/specs?locale=` | Full localized specs (224 types defined, 163 present; 20 languages) |
 | `GET /variants/{id}/images` | Image URLs |
 | `GET /variants/{id}/prices` | Price snapshot (single point-in-time, not a history) |
 | `GET /search?q=` | Free-text search |

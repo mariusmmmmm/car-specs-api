@@ -175,3 +175,35 @@ export async function currentUsage(kv: KVNamespace, keyHash: string, plan: Plan)
 
 /** Exposed for the tests and for /v1/usage, so the published caps have one source. */
 export const PLAN_QUOTAS = QUOTAS;
+
+// ── anonymous demo MCP (T92 D9) ─────────────────────────────────────────────
+//
+// An anonymous caller reaches only the pre-rendered 40-car blob, so there is no
+// catalogue exposure to bound and no monthly quota to keep. What is left to
+// protect is this Worker's CPU and KV reads, which a per-IP minute limit
+// handles. Fails CLOSED like everything else in this file: if the counter
+// cannot be read or written, the request is refused rather than served
+// uncounted — the rule that T79 had to come back and fix.
+export const ANON_DEMO_PER_MINUTE = 20;
+
+export async function checkAnonDemoRate(
+  kv: KVNamespace,
+  ipHash: string,
+): Promise<{ ok: true } | { ok: false; reason: "rate" | "metering" }> {
+  const key = `anon:${ipHash}:${minuteBucket()}`;
+  let used: number;
+  try {
+    used = Number((await kv.get(key)) ?? 0);
+  } catch (e) {
+    console.error("anon rate KV get failed — refusing:", e);
+    return { ok: false, reason: "metering" };
+  }
+  if (used >= ANON_DEMO_PER_MINUTE) return { ok: false, reason: "rate" };
+  try {
+    await kv.put(key, String(used + 1), { expirationTtl: 70 });
+  } catch (e) {
+    console.error("anon rate KV put failed — refusing:", e);
+    return { ok: false, reason: "metering" };
+  }
+  return { ok: true };
+}
