@@ -22,6 +22,12 @@ export type Env = {
   // INBOX_INGEST_TOKEN is a secret; INBOX_INGEST_URL defaults to production.
   INBOX_INGEST_TOKEN?: string;
   INBOX_INGEST_URL?: string;
+  // T92: the key that turns `variants.public_id` into an opaque token
+  // (lib/public-id.ts). Optional in the TYPE only because every other secret
+  // here is — the code does NOT degrade: a missing ID_TOKEN_KEY throws
+  // MissingIdSecret rather than minting tokens from a built-in default, which
+  // would make every one of them guessable.
+  ID_TOKEN_KEY?: string;
 };
 
 // Props carried from the /mcp entrypoint (index.ts) into the McpAgent Durable

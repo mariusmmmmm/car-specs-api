@@ -23,12 +23,12 @@
 // id in every response (a list page carries 50) and a 103k-row build artifact
 // in the way of every import.
 
-export type IdKind = "variant" | "generation" | "model";
+export type IdKind = "variant" | "generation" | "model" | "cursor";
 
 /** Short prefix so a token says what it addresses when it shows up in a log or
  *  a bug report. Part of the contract: `v_…` is never accepted where a model
  *  is expected, even before the cipher runs. */
-const PREFIX: Record<IdKind, string> = { variant: "v", generation: "g", model: "m" };
+const PREFIX: Record<IdKind, string> = { variant: "v", generation: "g", model: "m", cursor: "c" };
 
 const ROUNDS = 6;
 const HALF_BITS = 16;
@@ -104,9 +104,11 @@ export async function decodeId(secret: string | undefined, kind: IdKind, token: 
   if (!m) return null;
   const key = await keyFor(requireSecret(secret), kind);
   const id = await feistel(key, parseInt(m[1], 16) >>> 0, true);
-  // Nothing in this catalogue has id 0 or a negative id; anything outside a
-  // plausible range is a guess, and saying so here saves a DB round-trip.
-  return id > 0 && id <= 0x7fffffff ? id : null;
+  // Nothing in this catalogue has id 0 or a negative id, so a token that
+  // decodes to one is a guess and can be refused without a DB round-trip.
+  // Cursors are the exception: offset 0 is the first page.
+  const floor = kind === "cursor" ? 0 : 1;
+  return id >= floor && id <= 0x7fffffff ? id : null;
 }
 
 /** Batch helpers — a list page carries up to 50 ids and each token costs 6

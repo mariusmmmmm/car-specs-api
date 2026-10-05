@@ -7,6 +7,7 @@ import type { RawSpecValue } from "../lib/translations";
 import { localizeVariantSpecs } from "../lib/localize-variant";
 import { maxSyncedAt } from "../lib/meta";
 import { filterVariants, getVariantImages, variantExists } from "../lib/queries";
+import { readId, readCursor } from "../middleware/opaque-ids";
 
 export const variants = new Hono<{ Bindings: Env }>();
 
@@ -24,7 +25,7 @@ variants.get("/", async (c) => {
     priceMax: c.req.query("price_max") ? Number(c.req.query("price_max")) : null,
     year: c.req.query("year") ? Number(c.req.query("year")) : null,
     ev: c.req.query("ev") === "true",
-    cursor: c.req.query("cursor") ? Number(c.req.query("cursor")) : 0,
+    cursor: await readCursor(c),
     limit,
   });
 
@@ -52,7 +53,11 @@ variants.get("/", async (c) => {
 
 variants.get("/:id", async (c) => {
   const sql = getDb(c.env);
-  const id = Number(c.req.param("id"));
+  const id = await readId(c, "variant");
+  if (id === null) {
+    const { body, status, headers } = problem(404, "Not Found", `No variant with id ${c.req.param("id")}`);
+    return c.json(body, status, headers);
+  }
   const rows = await sql<
     {
       variant_id: number;
@@ -111,7 +116,11 @@ variants.get("/:id", async (c) => {
 variants.get("/:id/specs", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
-  const id = Number(c.req.param("id"));
+  const id = await readId(c, "variant");
+  if (id === null) {
+    const { body, status, headers } = problem(404, "Not Found", `No variant with id ${c.req.param("id")}`);
+    return c.json(body, status, headers);
+  }
   const result = await localizeVariantSpecs(sql, locale, id);
   if (!result) {
     const { body, status, headers } = problem(404, "Not Found", `No variant with id ${id}`);
@@ -127,7 +136,11 @@ variants.get("/:id/specs", async (c) => {
 
 variants.get("/:id/images", async (c) => {
   const sql = getDb(c.env);
-  const id = Number(c.req.param("id"));
+  const id = await readId(c, "variant");
+  if (id === null) {
+    const { body, status, headers } = problem(404, "Not Found", `No variant with id ${c.req.param("id")}`);
+    return c.json(body, status, headers);
+  }
   if (!(await variantExists(sql, id))) {
     const { body, status, headers } = problem(404, "Not Found", `No variant with id ${id}`);
     return c.json(body, status, headers);
@@ -146,7 +159,11 @@ variants.get("/:id/images", async (c) => {
 
 variants.get("/:id/prices", async (c) => {
   const sql = getDb(c.env);
-  const id = Number(c.req.param("id"));
+  const id = await readId(c, "variant");
+  if (id === null) {
+    const { body, status, headers } = problem(404, "Not Found", `No variant with id ${c.req.param("id")}`);
+    return c.json(body, status, headers);
+  }
   const rows = await sql<{ price_eur: number; recorded_at: Date }[]>`
     SELECT ph.price_eur, ph.recorded_at
     FROM variants v

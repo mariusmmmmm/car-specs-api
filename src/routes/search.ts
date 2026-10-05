@@ -16,7 +16,7 @@ export const search = new Hono<{ Bindings: Env }>();
 search.get("/", async (c) => {
   const q = c.req.query("q")?.trim();
   const locale = resolveLocale(c.req.query("locale"));
-  const { limit, offset } = parsePaging(c);
+  const { limit, offset } = await parsePaging(c);
   if (!q) {
     const { body, status, headers } = problem(400, "Bad Request", "Missing required query param: q");
     return c.json(body, status, headers);

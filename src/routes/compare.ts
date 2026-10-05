@@ -4,6 +4,7 @@ import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
 import { localizeVariantSpecs } from "../lib/localize-variant";
+import { readIdList } from "../middleware/opaque-ids";
 
 export const compare = new Hono<{ Bindings: Env }>();
 
@@ -13,14 +14,21 @@ compare.get("/", async (c) => {
     const { body, status, headers } = problem(400, "Bad Request", "Missing required query param: ids");
     return c.json(body, status, headers);
   }
-  const ids = idsParam
-    .split(",")
-    .map((s) => Number(s.trim()))
-    .filter((n) => Number.isFinite(n));
-  if (ids.length < 2 || ids.length > 4) {
+  const tokens = idsParam.split(",").map((s) => s.trim()).filter(Boolean);
+  if (tokens.length < 2 || tokens.length > 4) {
     const { body, status, headers } = problem(400, "Bad Request", "ids must contain 2-4 variant IDs.");
     return c.json(body, status, headers);
   }
+  // Decoded strictly. Until 2026-10-04 this filtered out anything unparseable,
+  // so `?ids=<a>,typo,<b>` quietly compared two cars instead of three and
+  // answered 200 — a wrong answer presented as a right one.
+  const decoded = await readIdList(c, "variant", "ids");
+  const badAt = decoded.findIndex((id) => id === null);
+  if (badAt !== -1) {
+    const { body, status, headers } = problem(400, "Bad Request", `Not a valid variant id: ${tokens[badAt]}`);
+    return c.json(body, status, headers);
+  }
+  const ids = decoded as number[];
 
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
@@ -28,7 +36,7 @@ compare.get("/", async (c) => {
   const results = await Promise.all(ids.map((id) => localizeVariantSpecs(sql, locale, id)));
   const missing = ids.filter((_, i) => !results[i]);
   if (missing.length > 0) {
-    const { body, status, headers } = problem(404, "Not Found", `No variant(s) with id ${missing.join(", ")}`);
+    const { body, status, headers } = problem(404, "Not Found", `No variant(s) with id ${missing.map((_, i) => tokens[i]).join(", ")}`);
     return c.json(body, status, headers);
   }
 

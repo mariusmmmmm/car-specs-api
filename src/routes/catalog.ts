@@ -5,6 +5,7 @@ import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
 import { maxSyncedAt } from "../lib/meta";
 import { parsePaging, nextLink } from "../lib/pagination";
+import { readId } from "../middleware/opaque-ids";
 import { listGenerationsForModel } from "../lib/queries";
 
 export const catalog = new Hono<{ Bindings: Env }>();
@@ -12,7 +13,7 @@ export const catalog = new Hono<{ Bindings: Env }>();
 catalog.get("/brands", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
-  const { limit, offset } = parsePaging(c);
+  const { limit, offset } = await parsePaging(c);
   const rows = await sql<
     { id: number; slug: string; name: string; wikidata_qid: string | null; last_synced_at: Date | null }[]
   >`
@@ -76,7 +77,7 @@ catalog.get("/brands/:slug/models", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
   const slug = c.req.param("slug");
-  const { limit, offset } = parsePaging(c);
+  const { limit, offset } = await parsePaging(c);
   const rows = await sql<
     { id: number; brand_id: number; slug: string; name: string; last_synced_at: Date | null }[]
   >`
@@ -110,8 +111,14 @@ catalog.get("/brands/:slug/models", async (c) => {
 catalog.get("/models/:id/generations", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
-  const modelId = Number(c.req.param("id"));
-  const { limit, offset } = parsePaging(c);
+  const modelId = await readId(c, "model");
+  if (modelId === null) {
+    // Same answer as an unknown model: a guessed token and a car that does not
+    // exist must be indistinguishable from outside.
+    const { body, status, headers } = problem(404, "Not Found", `No model with id ${c.req.param("id")}`);
+    return c.json(body, status, headers);
+  }
+  const { limit, offset } = await parsePaging(c);
   const rows = await listGenerationsForModel(sql, locale, modelId, { limit, offset });
   if (rows.length === 0 && offset === 0) {
     const exists = await sql`SELECT 1 FROM models WHERE public_id = ${modelId} AND is_active LIMIT 1`;
@@ -139,8 +146,12 @@ catalog.get("/models/:id/generations", async (c) => {
 catalog.get("/generations/:id/variants", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
-  const genId = Number(c.req.param("id"));
-  const { limit, offset } = parsePaging(c);
+  const genId = await readId(c, "generation");
+  if (genId === null) {
+    const { body, status, headers } = problem(404, "Not Found", `No generation with id ${c.req.param("id")}`);
+    return c.json(body, status, headers);
+  }
+  const { limit, offset } = await parsePaging(c);
   const rows = await sql<
     {
       variant_id: number;
@@ -199,7 +210,7 @@ catalog.get("/generations/:id/variants", async (c) => {
 catalog.get("/specs/catalog", async (c) => {
   const sql = getDb(c.env);
   const locale = resolveLocale(c.req.query("locale"));
-  const { limit, offset } = parsePaging(c);
+  const { limit, offset } = await parsePaging(c);
   const rows = await sql<
     { spec_key: string; display_name: string; unit: string | null; group: string | null }[]
   >`

@@ -1,3 +1,5 @@
+import type { Plan } from "./quota";
+
 export async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -12,7 +14,10 @@ export function generateApiKey(prefix = "cd_free"): string {
 
 export type KeyRecord = {
   email: string;
-  plan: "free" | "apify";
+  // One source for the plan names: lib/quota.ts owns them, because that is
+  // where their limits live. Typed separately until 2026-10-04, which is how a
+  // `demo` plan could exist in the quota table and be unrepresentable on a key.
+  plan: Plan;
   tos_version: string;
   tos_accepted_at: string;
   created_at: string;

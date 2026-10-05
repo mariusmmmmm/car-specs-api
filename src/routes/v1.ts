@@ -11,6 +11,8 @@ import { admin } from "./admin";
 import { usage } from "./usage";
 import { exportRoute } from "./export";
 import { requireApiKey } from "../middleware/auth";
+import { opaqueIds } from "../middleware/opaque-ids";
+import { demo } from "./demo";
 import { recordRestCall } from "../lib/usage";
 
 export const v1 = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -33,6 +35,25 @@ v1.route("/admin", admin);
 // Everything else needs a Free (or later, paid) API key + counts against quota.
 const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 protectedV1.use("*", requireApiKey);
+
+// A demo key is answered entirely from the pre-rendered blob in KV and never
+// reaches the routes below (T92). Dispatching here, rather than checking a
+// scope allowlist inside each route, is what makes the guarantee structural:
+// a demo request is never handed a database connection, so there is nothing
+// outside the 40-car blob for it to read. A route that forgets to consult an
+// allowlist leaks; a route that is never reached cannot.
+protectedV1.use("*", async (c, next) => {
+  if (c.get("apiKeyRecord")?.plan !== "demo") return next();
+  const url = new URL(c.req.url);
+  url.pathname = url.pathname.replace(/^\/v1/, "") || "/";
+  // No next() — the response is final.
+  c.res = await demo.fetch(new Request(url, c.req.raw), c.env);
+});
+
+// Internal ids never leave: one gate on the way out instead of one rewrite per
+// route, so the next route someone adds cannot forget (T92). Mounted after the
+// demo dispatch because routes/demo.ts already hands back tokens.
+protectedV1.use("*", opaqueIds);
 // Usage observability (BIZ-D7 §5): one datapoint per authenticated REST call,
 // after the route resolves so routePath is the matched pattern (not "*").
 // Runs only for requests that passed auth — rejected 401/429s never reach here.

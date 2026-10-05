@@ -1,4 +1,6 @@
 import type { Context } from "hono";
+import type { Env } from "../types";
+import { decodeId } from "./public-id";
 
 // Uniform list pagination (all list endpoints, per owner decision 2026-07-27):
 // 50 rows/page, offset-based via an OPAQUE `cursor` token the client echoes
@@ -8,10 +10,18 @@ import type { Context } from "hono";
 // its own keyset cursor (also opaque); the contract is identical either way.
 export const PAGE_LIMIT = 50;
 
-export function parsePaging(c: Context): { limit: number; offset: number } {
+// The cursor is an opaque token (T92), for the same reason the ids are: the
+// /v1/variants filter uses a KEYSET cursor whose value is the last row's
+// variant_id, so a published cursor hands back one real id per page.
+// An unreadable cursor restarts from the first page rather than 400-ing — a
+// client holding one across a key rotation should page again, not break.
+export async function parsePaging(
+  c: Context<{ Bindings: Env }>,
+): Promise<{ limit: number; offset: number }> {
   const limit = Math.min(Math.max(Number(c.req.query("limit")) || PAGE_LIMIT, 1), PAGE_LIMIT);
-  const offset = Math.max(Number(c.req.query("cursor")) || 0, 0);
-  return { limit, offset };
+  const raw = c.req.query("cursor");
+  const decoded = raw ? await decodeId(c.env.ID_TOKEN_KEY, "cursor", raw) : 0;
+  return { limit, offset: Math.max(decoded ?? 0, 0) };
 }
 
 // A full page implies there may be more → hand back the next offset. On the
