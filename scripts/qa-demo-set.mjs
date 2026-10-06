@@ -14,6 +14,9 @@
 import postgres from "postgres";
 import { createRequire } from "node:module";
 import { pipelineRunning } from "./pipeline-running.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const DSN = process.env.DEMO_SET_DSN ?? "postgresql://localhost:5432/cars_v3";
 const SELF_TEST = process.argv.includes("--self-test");
@@ -165,8 +168,27 @@ const RULES = [
   },
 ];
 
+// The set is picked from the local replica, which runs AHEAD of production.
+// The first frozen set contained two cars cars_prod did not have, so the API
+// answered fine (the blob is self-contained) while cars-data.com 404ed on them
+// — to exactly the audience the demo exists to reassure.
+const PROD_IDS_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.demo-prod-ids.txt");
+const prodIds = fs.existsSync(PROD_IDS_FILE)
+  ? new Set(fs.readFileSync(PROD_IDS_FILE, "utf8").split("\n").map((l) => Number(l.trim())).filter(Boolean))
+  : null;
+
+RULES.push({
+  name: "every variant in the set also exists in PRODUCTION",
+  run: (f) => {
+    if (!f.prodIds) return "no .demo-prod-ids.txt — cannot tell, which is not a pass";
+    const missing = f.ids.filter((id) => !f.prodIds.has(id));
+    return missing.length === 0 ? null : `${missing.length} car(s) are in the local replica but not in prod`;
+  },
+});
+
 const facts = {
   ids,
+  prodIds,
   rows,
   specBy,
   imgBy,
@@ -192,6 +214,7 @@ if (SELF_TEST) {
     ["a variant lost its specs", (f) => { f.specBy.set(f.ids[0], 3); }],
     ["a variant lost its images", (f) => { f.imgBy.delete(f.ids[0]); }],
     ["a brand lost a model", (f) => { f.rows.forEach((r) => { if (r.brand === "Ford") r.model = "Focus"; }); }],
+    ["a car exists locally but not in prod", (f) => { f.prodIds = new Set([...f.prodIds].filter((x) => x !== f.ids[0])); }],
     ["two cars in ONE generation share a name", (f) => {
       const g = Number(f.rows[0].generation_id);
       const sib = f.rows.find((r) => Number(r.generation_id) === g && r !== f.rows[0]);

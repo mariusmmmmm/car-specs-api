@@ -35,6 +35,31 @@ const GEN_PER_MODEL = 2;
 const VAR_PER_GEN = 2;
 const MIN_SPECS = 100;
 
+// The demo must only contain cars the PUBLIC SITE has. The set is picked from
+// the local replica, which runs ahead of prod — the October import put 273 new
+// variants in cars_v3 that cars_prod has not received, and the first frozen set
+// took two of them. The API would still answer (the blob is self-contained),
+// but cars-data.com would 404 on those two cars, to exactly the audience the
+// demo exists to reassure.
+//
+// So: intersect with the prod-active ids. Refresh the file with
+//   ssh cars-data-prod "sudo -u postgres psql -d cars_prod -At -c \
+//     \"select v.public_id from variants v join generations g on g.id=v.generation_id \
+//       join models m on m.id=g.model_id join brands b on b.id=m.brand_id \
+//       where v.is_active and b.display_name in (...) and m.display_name in (...)\"" \
+//   > .demo-prod-ids.txt
+const PROD_IDS_FILE = path.resolve(here, "../.demo-prod-ids.txt");
+let PROD_IDS = null;
+if (fs.existsSync(PROD_IDS_FILE)) {
+  PROD_IDS = new Set(
+    fs.readFileSync(PROD_IDS_FILE, "utf8").split("\n").map((l) => Number(l.trim())).filter(Boolean),
+  );
+  console.log(`prod allowlist: ${PROD_IDS.size} active ids`);
+} else {
+  console.error(`! ${path.basename(PROD_IDS_FILE)} missing — refusing to freeze a set that may contain cars production does not have.`);
+  process.exit(1);
+}
+
 const sql = postgres(DSN, { max: 4, idle_timeout: 5 });
 
 /** Every candidate variant under one model, with what the guard needs to judge
@@ -77,7 +102,8 @@ async function candidates(brand, model) {
       spec_count: specBy.get(Number(r.variant_id)) ?? 0,
       image_count: imgBy.get(Number(r.variant_id)) ?? 0,
     }))
-    .filter((r) => r.spec_count >= MIN_SPECS && r.image_count >= 1);
+    .filter((r) => r.spec_count >= MIN_SPECS && r.image_count >= 1)
+    .filter((r) => PROD_IDS.has(Number(r.variant_id)));
 }
 
 // Selection is greedy on fuel at BOTH levels, and that is not an optimisation —

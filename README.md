@@ -2,7 +2,7 @@
 
 REST API and remote MCP server over cars-data.com's multilingual vehicle-specs
 database: **103,099 vehicle variants**, **1,300+ models**, **5,395 generations**,
-**224 spec types defined** (163 present in the data), in **20 languages**
+**224 spec types defined** (221 present in the data), in **20 languages**
 (including Arabic, RTL).
 
 - REST API: `https://api.cars-data.com/v1`
@@ -54,7 +54,7 @@ curl https://api.cars-data.com/v1/variants/42164/specs?locale=de \
 | `GET /models/{id}/generations` | Generations for a model |
 | `GET /generations/{id}/variants` | Variants for a generation |
 | `GET /variants`, `/variants/{id}` | Filterable variant listing / single variant |
-| `GET /variants/{id}/specs?locale=` | Full localized specs (224 types defined, 163 present; 20 languages) |
+| `GET /variants/{id}/specs?locale=` | Full localized specs (224 types defined, 221 present; 20 languages) |
 | `GET /variants/{id}/images` | Image URLs |
 | `GET /variants/{id}/prices` | Price snapshot (single point-in-time, not a history) |
 | `GET /search?q=` | Free-text search |

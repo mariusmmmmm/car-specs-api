@@ -40,6 +40,8 @@ export const DEMO_VARIANT_IDS: ReadonlySet<number> = new Set([
   104486,
   105887,
   105900,
+  106558,
+  106562,
   107180,
   107183,
   108353,
@@ -50,8 +52,6 @@ export const DEMO_VARIANT_IDS: ReadonlySet<number> = new Set([
   111532,
   111599,
   111600,
-  112638,
-  112639,
 ]);
 
 export const DEMO_GENERATION_IDS: ReadonlySet<number> = new Set([

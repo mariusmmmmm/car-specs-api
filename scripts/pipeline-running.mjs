@@ -15,23 +15,51 @@
 // `idle in transaction` — which is exactly as dangerous to read as `active`.
 import postgres from "postgres";
 
-const WRITING_STATES = ["active", "idle in transaction", "idle in transaction (aborted)"];
+// Three wrong signals before this one, so they are written down rather than
+// quietly replaced:
+//
+//   1. `pgrep -f run-monthly.sh` — what this project's own note recommends —
+//      MATCHES ITS OWN CALLER: the string sits in the invoking shell's command
+//      line. It reported the pipeline running with the pipeline long finished.
+//      Narrowing the pattern did not help; a sibling shell quoting the string
+//      still matched. Command-line text cannot work when the caller names the
+//      target.
+//   2. "any non-idle backend" — refused when another session merely READ
+//      cars_v3. Reads are not the hazard.
+//   3. tuple-write deltas from pg_stat_database — those counters move on
+//      COMMIT, so a single long INSERT, which is exactly what the import does,
+//      leaves them flat for its whole duration. Looked quiet mid-write.
+//
+// What holds for the whole duration of a write, and is never taken by a reader,
+// is a WRITE LOCK. Readers take AccessShareLock; anything that changes rows
+// takes RowExclusiveLock or stronger, from the first row to the commit.
+const WRITE_LOCKS = [
+  "RowExclusiveLock",
+  "ShareRowExclusiveLock",
+  "ExclusiveLock",
+  "AccessExclusiveLock",
+];
 
 export async function pipelineRunning(dsn = process.env.DEMO_SET_DSN ?? "postgresql://localhost:5432/cars_v3") {
-  const sql = postgres(dsn, { max: 1, idle_timeout: 3 });
+  const sql = postgres(dsn, { max: 1, idle_timeout: 5 });
   try {
     const rows = await sql`
-      SELECT pid, state, application_name,
-             left(coalesce(query, ''), 80) AS query,
-             round(extract(epoch FROM now() - coalesce(xact_start, query_start)))::int AS age_s
-      FROM pg_stat_activity
-      WHERE datname = current_database()
-        AND pid <> pg_backend_pid()
-        AND state = ANY(${WRITING_STATES})
+      SELECT l.pid, l.mode, c.relname AS rel,
+             round(extract(epoch FROM now() - a.xact_start))::int AS age_s
+      FROM pg_locks l
+      JOIN pg_stat_activity a ON a.pid = l.pid
+      LEFT JOIN pg_class c ON c.oid = l.relation
+      WHERE l.granted
+        AND l.locktype = 'relation'
+        AND l.mode = ANY(${WRITE_LOCKS})
+        AND l.pid <> pg_backend_pid()
+        AND a.datname = current_database()
+        AND coalesce(c.relname, '') NOT LIKE 'pg\\_%'
       ORDER BY age_s DESC NULLS LAST
+      LIMIT 5
     `;
     return rows.length > 0
-      ? { running: true, what: `${rows.length} backend(s); oldest ${rows[0].age_s}s: ${rows[0].state} — ${rows[0].query}` }
+      ? { running: true, what: `${rows.length} write lock(s); ${rows[0].mode} on ${rows[0].rel ?? "?"} for ${rows[0].age_s}s` }
       : { running: false, what: null };
   } finally {
     await sql.end();

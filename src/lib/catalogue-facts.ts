@@ -12,32 +12,35 @@
 // refuses to run while the monthly pipeline is rewriting cars_v3. A number
 // here without a passing check is a claim, not a fact.
 
-/** Measured against cars_v3 AFTER the October pipeline run, by
- *  scripts/verify-catalogue-facts.mjs. The run moved three of them — variants
- *  +273, generations +33 and a whole new brand (119 → 120) — which is the
- *  guard earning its keep: without it these would have gone on being published
- *  as the 2026-10-04 figures. Re-run it after every import. */
+/** Measured against **cars_prod** — the database the API actually serves.
+ *
+ *  Verified by scripts/verify-catalogue-facts.mjs --prod. The first version of
+ *  this file was verified against the LOCAL replica and was wrong in both
+ *  directions: the replica runs ahead on variant counts (it had the October
+ *  import, prod does not) and behind on enrichment. Published that way, /mcp
+ *  told agents "103,372 variants" while /v1/health answered 103,099 — two
+ *  numbers from the same API disagreeing, which is the exact defect this file
+ *  exists to prevent, recreated one database over.
+ *
+ *  Re-run the verifier after every prod data deploy, not after every import. */
 export const CATALOGUE_AS_OF = "2026-10-06";
 
 export const CATALOGUE = {
-  /** Active variants. SELECT count(*) FROM variants WHERE is_active. */
-  variants: 103_372,
-  /** Variants that actually carry a spec document. 909 active variants have no
-   *  `variant_doc` row and would answer with empty specs — which is also where
-   *  the old published "102,191 variants" came from: it was this number wearing
-   *  the other one's label. */
-  variantsWithSpecs: 102_190,
+  /** Active variants in prod. */
+  variants: 103_099,
+  /** Variants carrying a spec document — 103.098 of 103.099 in prod, i.e. all
+   *  but one. The "909 missing" noted earlier was a local-replica artifact:
+   *  mid-import the replica had fewer spec docs than live. */
+  variantsWithSpecs: 103_098,
   /** Brands with at least one active variant — NOT the 527-row master list. */
-  brands: 120,
-  generations: 5_428,
-  /** Spec types DEFINED in specs_catalog (all 224 are is_active). */
+  brands: 119,
+  generations: 5_395,
+  /** Spec types DEFINED in specs_catalog (all active). */
   specTypesDefined: 224,
-  /** Spec types that actually appear in the data:
-   *  SELECT count(DISTINCT k) FROM variant_doc, jsonb_object_keys(specs) k.
-   *  Published separately from the definitions on purpose — "224 spec types"
-   *  as a promise of what you GET is an overclaim, and the "180" it replaced
-   *  was simply wrong in both directions. */
-  specTypesPresent: 163,
+  /** Spec types that actually appear in prod data. Published separately from
+   *  the definitions because 224 as a promise of what you GET is an overclaim —
+   *  but the honest figure is 221, not the 163 the local replica showed. */
+  specTypesPresent: 221,
   specCategories: 21,
   /** Site locales. Derived from SUPPORTED_LOCALES, never typed. */
   get locales(): number {
