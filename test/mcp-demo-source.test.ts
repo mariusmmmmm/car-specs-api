@@ -37,7 +37,7 @@ const env = (payload: unknown = PAYLOAD) => ({
   API_KEYS: { async get(k: string) { return k.startsWith("demo:v1:") && payload ? JSON.stringify(payload) : null; } },
 }) as never;
 
-describe("MCP demo source — the blob, never the database (T92 D9)", () => {
+describe("MCP demo source — the blob, never the database (T107 D9)", () => {
   test("search cannot return anything outside the 40, for any query", async () => {
     const src = (await demoSource(env(), "en"))!;
     for (const q of ["", "bmw", "e", "mercedes", "' OR 1=1 --", "%"]) {

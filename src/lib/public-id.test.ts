@@ -6,7 +6,7 @@ const OTHER = "a-different-secret-also-long-enough";
 
 beforeEach(() => __resetIdKeyCache());
 
-describe("opaque public ids (T92)", () => {
+describe("opaque public ids (T107)", () => {
   it("round-trips every id across the live range and beyond", async () => {
     const ids = [1, 4, 42, 1000, 50_000, 103_099, 115_170, 999_999, 0x7ffffffe];
     for (const id of ids) {

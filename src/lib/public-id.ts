@@ -1,4 +1,4 @@
-// Opaque public identifiers (T92, owner decision 2026-10-04).
+// Opaque public identifiers (T107, owner decision 2026-10-04).
 //
 // WHY: `variants.public_id` is a sequential integer. Measured on 2026-10-04 it
 // runs 4 → 115.170 with 103.099 rows active, so **89,5% of the integer range is

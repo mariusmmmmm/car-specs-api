@@ -36,7 +36,7 @@ export default {
       const iph = await ipHash(request.headers.get("cf-connecting-ip") ?? "unknown", env.IP_HASH_SALT);
       const presented = readApiKey(request.headers, url);
 
-      // NO KEY AT ALL → the demo scope, anonymously (T92 D9). Scoped to the
+      // NO KEY AT ALL → the demo scope, anonymously (T107 D9). Scoped to the
       // 40-car blob and answered without a database connection, so T73's
       // reason for demanding a key here — "no ceiling on what one machine
       // could pull" — is structurally satisfied instead of enforced.

@@ -56,7 +56,7 @@ function env(opts: { payload?: unknown; dbShouldNeverBeTouched?: boolean } = {})
 
 const call = (path: string, e = env()) => demo.fetch(new Request(`http://x${path}`), e);
 
-describe("demo tier — served from KV, never from Postgres (T92)", () => {
+describe("demo tier — served from KV, never from Postgres (T107)", () => {
   test("the index hands over the whole set in one call, with opaque ids", async () => {
     const res = await call("/demo");
     expect(res.status).toBe(200);

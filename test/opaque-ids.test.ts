@@ -19,7 +19,7 @@ function app(body: unknown, status = 200) {
 
 const get = (body: unknown, status?: number) => app(body, status).fetch(new Request("http://x/"), env);
 
-describe("opaque ids — one gate on the way out (T92)", () => {
+describe("opaque ids — one gate on the way out (T107)", () => {
   test("rewrites variant_id, generation_id and model_id wherever they sit", async () => {
     const res = await get(envelope(
       { variant_id: 42, generation_id: 7, model_id: 3, display_name: "x" },

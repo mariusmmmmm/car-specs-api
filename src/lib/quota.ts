@@ -17,7 +17,7 @@ export type Plan = "free" | "demo" | "apify";
 // legitimate traffic is ~225 calls/day ACROSS THE WHOLE API, and the busiest
 // legitimate day on record is 1.245 REST calls spread over all keys.
 //
-// `demo` added 2026-10-04 (T92). Its real limit is not here: a demo key can
+// `demo` added 2026-10-04 (T107). Its real limit is not here: a demo key can
 // only ever resolve the 40 variants in lib/demo-set.ts, served pre-rendered
 // from KV, so no number in this table protects the catalogue — the allowlist
 // does. What is left for a demo key to protect is the database and our own
@@ -29,7 +29,7 @@ const QUOTAS: Record<Plan, { monthly: number; daily: number; perMinute: number }
   apify: { monthly: 100_000, daily: 10_000, perMinute: 120 },
 };
 
-// The service-wide ceiling on catalogue reads (T92 M1) — the ONLY layer that a
+// The service-wide ceiling on catalogue reads (T107 M1) — the ONLY layer that a
 // new credential cannot defeat by existing. Per-key caps provably do not bound
 // a GROUP: on 30–31 August 139 keys each stayed inside its own monthly cap and
 // together pulled 85–99% of the catalogue. This counter does not care how many
@@ -89,7 +89,7 @@ export type QuotaResult =
 // extraction stopped when the CATALOGUE ran out (87.600–102.292 spec reads
 // against 103.099 variants), not when a limit bit.
 //
-// Consequence, and the reason T92 exists: an exact per-key cap needs atomic
+// Consequence, and the reason T107 exists: an exact per-key cap needs atomic
 // counting (one Durable Object per key — $0 at this volume), and until then the
 // layer that actually bounds exposure is the service-wide ceiling below plus
 // the demo allowlist, neither of which depends on counting being right.
@@ -176,7 +176,7 @@ export async function currentUsage(kv: KVNamespace, keyHash: string, plan: Plan)
 /** Exposed for the tests and for /v1/usage, so the published caps have one source. */
 export const PLAN_QUOTAS = QUOTAS;
 
-// ── anonymous demo MCP (T92 D9) ─────────────────────────────────────────────
+// ── anonymous demo MCP (T107 D9) ─────────────────────────────────────────────
 //
 // An anonymous caller reaches only the pre-rendered 40-car blob, so there is no
 // catalogue exposure to bound and no monthly quota to keep. What is left to
