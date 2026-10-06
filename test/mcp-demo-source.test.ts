@@ -119,3 +119,19 @@ describe("anonymous demo rate limit", () => {
     if (!r.ok) expect(r.reason).toBe("metering");
   });
 });
+
+describe("the /mcp door answers probes honestly", () => {
+  // Registries, uptime monitors and link checkers probe with HEAD. 404 there
+  // reads as "no such endpoint" — and this project's own publishing checklist
+  // ran exactly that probe and would have concluded the server was broken.
+  test("HEAD gets 405 with Allow, not 404", async () => {
+    const worker = (await import("../src/index")).default;
+    const res = await worker.fetch(
+      new Request("https://api.cars-data.com/mcp", { method: "HEAD" }),
+      { API_KEYS: { async get() { return null; }, async put() {} } } as never,
+      { waitUntil: () => {} } as never,
+    );
+    expect(res.status).toBe(405);
+    expect(res.headers.get("Allow")).toBe("POST, OPTIONS");
+  });
+});

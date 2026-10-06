@@ -1,15 +1,15 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.cars-data/car-specs-api",
-  "title": "cars-data.com \u2014 Car Specs API",
-  "description": "Search, compare & filter 103,099 car variants \u2014 224 specs, 20 languages, EV data. Free demo without a key.",
+  "title": "cars-data.com — Car Specs API",
+  "description": "Search, compare & filter 103,099 car variants — 224 specs, 20 languages, EV data. Free demo without a key.",
   "status": "active",
   "repository": {
     "url": "https://github.com/mariusmmmmm/car-specs-api",
     "source": "github"
   },
   "websiteUrl": "https://cars-data.com/en/api/for-ai-agents",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "remotes": [
     {
       "type": "streamable-http",
@@ -17,8 +17,8 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <your cars-data.com API key> \u2014 request one at https://cars-data.com/en/api/for-ai-agents (manually reviewed).",
-          "isRequired": true,
+          "description": "Bearer <your cars-data.com API key> — OPTIONAL. Without it the server answers a fixed 40-car demo (every spec, every photo, 20 languages). A free key opens all 103,099 variants: https://cars-data.com/en/api/for-ai-agents",
+          "isRequired": false,
           "isSecret": true
         }
       ]

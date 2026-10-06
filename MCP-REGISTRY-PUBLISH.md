@@ -15,10 +15,25 @@ these are the clicks.
    `https://cars-data.com/en/api/for-ai-agents`; publish the listing only after
    that page is live, so the link resolves.
 2. **Confirm the MCP endpoint answers.** `https://api.cars-data.com/mcp` must be
-   reachable (streamable HTTP). Quick check:
-   `curl -sI -H "Accept: text/event-stream" https://api.cars-data.com/mcp` (a
-   `200`/`405`/`406` proves it's routed; a Cloudflare `403`/`1xxx` means the WAF
-   is blocking it — fix before listing, per the 2026-07-13 lesson).
+   reachable (streamable HTTP). The check below is a real handshake, because a
+   HEAD probe cannot tell a routed endpoint from a missing one:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST https://api.cars-data.com/mcp \
+     -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"1"}}}'
+   ```
+
+   `200` means it is routed AND speaks MCP — and since 2026-10-06 it means that
+   **without a key**, because an anonymous caller gets the 40-car demo. A
+   Cloudflare `403`/`1xxx` means the WAF is blocking it: fix before listing, per
+   the 2026-07-13 lesson.
+
+   The old check here was `curl -sI` (a HEAD) expecting `200`/`405`/`406`. HEAD
+   returned **404** until 2026-10-06 — so following this file would have
+   concluded the endpoint was broken while it was answering POSTs perfectly.
+   HEAD now returns `405` with `Allow: POST, OPTIONS`, which is honest, but the
+   handshake above is the check that proves something.
 
 ---
 ## OWNER STEPS (need credentials — agent cannot run these)
