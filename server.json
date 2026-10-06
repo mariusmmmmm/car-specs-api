@@ -17,7 +17,7 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <your cars-data.com API key> — OPTIONAL. Without it the server answers a fixed 40-car demo (every spec, every photo, 20 languages). A free key opens all 103,099 variants: https://cars-data.com/en/api/for-ai-agents",
+          "description": "Bearer <your cars-data.com API key> — OPTIONAL. Without it the server answers a fixed 40-car demo (every spec, every photo, 20 languages). A demo key, issued in one click, covers the same 40 cars over REST: https://cars-data.com/en/api/for-ai-agents",
           "isRequired": false,
           "isSecret": true
         }

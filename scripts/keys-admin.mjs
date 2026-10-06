@@ -1,14 +1,19 @@
 #!/usr/bin/env node
-// Owner tool for the manual key approval flow (T73). Every Free API key is
-// reviewed by hand: a request arrives by email (subject "[cars-data API] Key
-// request <id>"), you decide here, and on approval the Worker emails the key
-// to the requester. Talks to the Worker's /v1/admin routes.
+// Owner tool for API keys. Talks to the Worker's /v1/admin routes.
 //
-//   node scripts/keys-admin.mjs requests [pending|approved|rejected|all]
-//   node scripts/keys-admin.mjs approve <request-id>
-//   node scripts/keys-admin.mjs reject  <request-id>
-//   node scripts/keys-admin.mjs keys                     every key that exists, with status
-//   node scripts/keys-admin.mjs approve-key <hash-prefix>  re-enable a key issued before approval existed
+// There is no review queue any more (owner, 2026-10-06). The only self-serve
+// key is the demo, issued automatically when the requester clicks the link in
+// their email, and the lead — name, company, website, role, use case — lands in
+// the site inbox at that moment. So `requests`, `approve` and `reject` are gone:
+// nothing creates the records they read.
+//
+// `grant` replaces them, and is the ONLY way a key on a non-demo plan comes
+// into being — the deliberate path for saying yes to someone who needs the full
+// catalogue, which the public cannot self-serve at any price in requests.
+//
+//   node scripts/keys-admin.mjs keys                       every key that exists, with status
+//   node scripts/keys-admin.mjs grant <email> [plan]       plan: free (default) | demo | apify
+//   node scripts/keys-admin.mjs approve-key <hash-prefix>   re-enable a key
 //   node scripts/keys-admin.mjs revoke-key  <hash-prefix>
 //
 // Needs ADMIN_TOKEN (the Worker secret of the same name), read from the
@@ -43,29 +48,17 @@ async function call(method, p) {
   return body.data;
 }
 
-const [cmd, arg] = process.argv.slice(2);
+const [cmd, arg, arg2] = process.argv.slice(2);
 switch (cmd) {
-  case "requests": {
-    const rows = await call("GET", `/requests?status=${arg ?? "pending"}`);
-    if (!rows.length) console.log("No requests.");
-    for (const r of rows) {
-      console.log(`\n${r.id}  ${r.status}  ${r.created_at.slice(0, 16)}  ${r.name} <${r.email}>`);
-      console.log(`  ${r.role ?? "—"} @ ${r.company ?? "—"}  ${r.website ?? ""}`);
-      console.log(`  ${r.use_case.replace(/\n/g, "\n  ")}`);
-    }
-    break;
-  }
-  case "approve": {
-    const r = await call("POST", `/requests/${arg}/approve`);
+  case "grant": {
+    if (!arg) { console.error("usage: keys-admin.mjs grant <email> [free|demo|apify]"); process.exit(1); }
+    const plan = arg2 ?? "free";
+    const r = await call("POST", `/grant?email=${encodeURIComponent(arg)}&plan=${encodeURIComponent(plan)}`);
     console.log(r.emailed
-      ? `Approved ${arg}: key ${r.key_hash_prefix}… emailed to ${r.email}.`
-      : `Approved ${arg}, but the email FAILED — send this key to ${r.email} yourself:\n${r.api_key}`);
+      ? `Granted ${plan} to ${r.email}: key ${r.key_hash_prefix}… emailed.`
+      : `Granted ${plan} to ${r.email}: key ${r.key_hash_prefix}…\n  EMAIL FAILED — send it yourself, it cannot be shown again:\n  ${r.api_key}`);
     break;
   }
-  case "reject":
-    await call("POST", `/requests/${arg}/reject`);
-    console.log(`Rejected ${arg}.`);
-    break;
   case "keys": {
     const rows = await call("GET", "/keys");
     console.log(`${rows.length} keys — ${rows.filter((k) => k.usable).length} usable`);

@@ -64,7 +64,7 @@ curl https://api.cars-data.com/v1/variants/42164/specs?locale=de \
 
 ### Request a free API key
 
-Every key is reviewed by hand. Send a request; if it is approved, the key is
+No key is reviewed. Send a request; click the link in the email and the key is
 emailed to you.
 
 ```bash
@@ -73,7 +73,7 @@ curl -X POST https://api.cars-data.com/v1/keys \
   -d '{"email": "you@example.com", "name": "Your Name", "company": "Your company", "website": "https://example.com", "role": "Developer", "use_case": "What you are building, in a sentence or two", "accept_tos": true}'
 ```
 
-Returns `202 pending_review`. Free tier: 1,000 requests/month, 20 req/min,
+Returns `202 verification_sent`. The key covers the 40-car demo set, 20 req/min,
 attribution required. Bulk data is licensed separately: https://cars-data.com/en/api.
 
 ### Key administration (owner)
@@ -84,7 +84,7 @@ Worker secrets for the flow: `ADMIN_TOKEN`, `BREVO_API_KEY`, `NOTIFY_TO`, `NOTIF
 
 ## Pricing
 
-- **Free** — 1,000 req/month, key issued after manual review, no payment.
+- **Demo** — 40 cars with every spec and photo, 20 languages. Issued automatically on an email click. The ONLY self-serve tier: nothing reaches the full catalogue without a licence.
 - **Apify** — pay-per-event, billed through the [Apify Store listing](https://apify.com/carsdatacom/car-specs-api), no API key needed.
 - **x402** — per-call USDC payment on Base for agents that want to pay without an account (not yet live — see the project roadmap).
 
@@ -94,7 +94,7 @@ There is no subscription/Stripe tier — Free and Apify (and, later, x402) are t
 
 Data comes from cars-data.com's multilingual vehicle-specs database. See
 [cars-data.com/en/api/terms](https://cars-data.com/en/api/terms) for the API Terms
-of Service (attribution required on Free tier; no bulk extraction / resale).
+of Service (attribution required; no bulk extraction / resale).
 
 ## License
 

@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { envelope, problem } from "../lib/response";
-import { generateApiKey, isUsable, sha256Hex, type KeyRecord, type KeyRequest } from "../lib/apikey";
+import { generateApiKey, isUsable, sha256Hex, type KeyRecord } from "../lib/apikey";
+import { TOS_VERSION } from "../lib/key-request";
 import { sendEmail } from "../lib/notify";
 
 // Owner-only key administration (T73). Every Free key is approved by hand;
@@ -47,68 +48,57 @@ async function listValues<T>(kv: KVNamespace, prefix: string): Promise<{ name: s
   return out;
 }
 
-// ── requests ────────────────────────────────────────────────────────────────
-admin.get("/requests", async (c) => {
-  const status = c.req.query("status") ?? "pending";
-  const all = await listValues<KeyRequest>(c.env.API_KEYS, "keyreq:");
-  const rows = all.map((r) => r.value).filter((r) => status === "all" || r.status === status);
-  rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
-  return ok(c, rows);
-});
+// The `keyreq:` review surface is GONE (owner, 2026-10-06). Nothing creates
+// those records any more: the only self-serve key is the demo, issued on an
+// email click, and the lead reaches the inbox at that moment. Endpoints that
+// read a record type nothing writes are worse than absent — `approve` minted a
+// FULL-CATALOGUE key, so a stale one was a door with no wall behind it.
+//
+// What replaced it is below: `grant`, the owner's deliberate path to a plan the
+// public cannot self-serve. Removing the review without it would have quietly
+// taken away the ability to say yes to someone like the two export enquiries
+// already in the inbox.
 
-admin.post("/requests/:id/approve", async (c) => {
-  const id = c.req.param("id");
-  const raw = await c.env.API_KEYS.get(`keyreq:${id}`);
-  if (!raw) return notFound(c, `No request ${id}`);
-  const req = JSON.parse(raw) as KeyRequest;
-  if (req.status !== "pending") {
-    const { body, status, headers } = problem(409, "Conflict", `Request ${id} is already ${req.status}.`);
+// ── grant: the only way a non-demo key comes into being ─────────────────────
+admin.post("/grant", async (c) => {
+  const email = (c.req.query("email") ?? "").trim().toLowerCase();
+  const plan = (c.req.query("plan") ?? "free") as KeyRecord["plan"];
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    const { body, status, headers } = problem(400, "Bad Request", "`email` is required.");
+    return c.json(body, status, headers);
+  }
+  if (plan !== "free" && plan !== "apify" && plan !== "demo") {
+    const { body, status, headers } = problem(400, "Bad Request", "`plan` must be free, demo or apify.");
     return c.json(body, status, headers);
   }
 
-  const rawKey = generateApiKey();
+  const rawKey = generateApiKey(plan === "demo" ? "cd_demo" : "cd_free");
   const keyHash = await sha256Hex(rawKey);
   const record: KeyRecord = {
-    email: req.email,
-    name: req.name,
-    plan: "free",
-    tos_version: req.tos_version,
-    tos_accepted_at: req.tos_accepted_at,
+    email,
+    plan,
+    tos_version: TOS_VERSION,
+    tos_accepted_at: now(),
     created_at: now(),
-    email_verified: true, // the key only reaches the requester through this address
+    // Granted by hand, so the address is as verified as the owner's judgement.
+    email_verified: true,
     approved: true,
     approved_at: now(),
-    request_id: req.id,
   };
   await c.env.API_KEYS.put(`key:${keyHash}`, JSON.stringify(record));
-  const decided: KeyRequest = { ...req, status: "approved", decided_at: now(), key_hash_prefix: keyHash.slice(0, 8) };
-  await c.env.API_KEYS.put(`keyreq:${id}`, JSON.stringify(decided));
 
   const sent = await sendEmail(c.env, {
-    to: req.email,
+    to: email,
     replyTo: c.env.NOTIFY_TO,
     subject: "Your cars-data.com API key",
     text:
-      `Hi ${req.name},\n\nYour request was approved. Your API key:\n\n${rawKey}\n\n` +
-      `Send it as the X-Api-Key header (REST) or as "Authorization: Bearer <key>" (MCP, https://api.cars-data.com/mcp).\n` +
-      `Free plan: 1,000 requests per month, 20 per minute, attribution required.\n` +
+      `Your API key:\n\n${rawKey}\n\n` +
+      `Send it as the X-Api-Key header (REST) or "Authorization: Bearer <key>" (MCP).\n` +
       `Terms: https://cars-data.com/en/api/terms\nDocs: https://cars-data.com/en/api/for-ai-agents\n\n` +
       `Store it now — we keep only a hash and cannot show it again.\n\n— cars-data.com`,
   });
-  // If the email failed the owner still needs to deliver the key somehow, so
-  // it is returned to the admin caller (and only to the admin caller).
-  return ok(c, { id, email: req.email, key_hash_prefix: keyHash.slice(0, 8), emailed: sent, api_key: sent ? undefined : rawKey });
-});
-
-admin.post("/requests/:id/reject", async (c) => {
-  const id = c.req.param("id");
-  const raw = await c.env.API_KEYS.get(`keyreq:${id}`);
-  if (!raw) return notFound(c, `No request ${id}`);
-  const req = JSON.parse(raw) as KeyRequest;
-  await c.env.API_KEYS.put(`keyreq:${id}`, JSON.stringify({ ...req, status: "rejected", decided_at: now() }));
-  // Free the email so a genuine requester can try again with a better use case.
-  await c.env.API_KEYS.delete(`keyreq-email:${await sha256Hex(req.email)}`);
-  return ok(c, { id, status: "rejected" });
+  // Returned to the admin caller when the email failed, and only then.
+  return ok(c, { email, plan, key_hash_prefix: keyHash.slice(0, 8), emailed: sent, api_key: sent ? undefined : rawKey });
 });
 
 // ── existing keys (incl. those issued before manual approval) ───────────────

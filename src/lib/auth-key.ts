@@ -6,7 +6,13 @@ export type AuthResult =
   | { ok: true; keyHash: string; record: KeyRecord }
   | { ok: false; status: 401 | 403 | 429 | 503; detail: string };
 
-const GET_KEY = "Request a free key at https://cars-data.com/en/api/for-ai-agents (manually reviewed), or use the Apify Actor.";
+// No review any more (owner, 2026-10-06): the only self-serve key is the demo,
+// issued on an email click. The MCP server needs none at all, which is the
+// cheapest next step for whoever just hit this 401, so it is named first.
+const GET_KEY =
+  "The MCP server needs no key: https://api.cars-data.com/mcp. " +
+  "For REST, get a demo key in one click at https://cars-data.com/en/api/for-ai-agents — " +
+  "it covers 40 cars with every spec. The full catalogue is a licensed export: https://cars-data.com/en/api";
 
 /** Pull the key from `X-Api-Key` or `Authorization: Bearer …` (Cursor,
  *  Claude Desktop, Windsurf configs). For MCP only, also `?key=` in the URL:
@@ -35,7 +41,9 @@ export async function authenticate(env: Env, rawKey: string | null): Promise<Aut
       status: 403,
       detail: record.revoked_at
         ? "This API key has been revoked."
-        : "This API key is waiting for manual approval. You will get an email when it is active.",
+        // Reachable only for a key granted by hand and not yet enabled, since
+        // the self-serve path activates on the click that creates it.
+        : "This API key is not active yet. If you just requested it, click the link in the email we sent.",
     };
   }
   const q = await checkAndConsume(env.API_KEYS, keyHash, record.plan);
