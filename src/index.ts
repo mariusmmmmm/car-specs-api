@@ -6,6 +6,7 @@ import { CarsDataMCP } from "./mcp";
 import { authenticate, readApiKey } from "./lib/auth-key";
 import { checkAnonDemoRate } from "./lib/quota";
 import { ipHash, recordMcpThrottled } from "./lib/usage";
+import { mcpMethodGate } from "./lib/mcp-method-gate";
 import type { McpProps } from "./types";
 
 export { CarsDataMCP };
@@ -29,15 +30,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/mcp") {
-      // HEAD answered 404 until 2026-10-06, and 404 on a HEAD is a
-      // discoverability liability: registries, uptime monitors and link
-      // checkers probe with HEAD, and "not found" reads as "no such endpoint".
-      // The project's own publishing checklist (MCP-REGISTRY-PUBLISH.md) ran
-      // exactly this check and would have concluded the server was broken.
-      // 405 with Allow says "wrong method, right place", which is the truth.
-      if (request.method === "HEAD") {
-        return new Response(null, { status: 405, headers: { Allow: "POST, OPTIONS", "MCP-Protocol-Version": "2025-06-18" } });
-      }
+      // Probes that cannot carry a JSON-RPC call (see lib/mcp-method-gate.ts —
+      // it lives there because this file cannot be imported by a test).
+      const gated = mcpMethodGate(request.method);
+      if (gated) return gated;
       // MCP needs an API key like REST (T73, owner decision 2026-10-02). It
       // used to be anonymous with a per-IP minute limit, which put no ceiling
       // on what one machine could pull. Same gate, same quota as REST; the key

@@ -124,14 +124,22 @@ describe("the /mcp door answers probes honestly", () => {
   // Registries, uptime monitors and link checkers probe with HEAD. 404 there
   // reads as "no such endpoint" — and this project's own publishing checklist
   // ran exactly that probe and would have concluded the server was broken.
+  //
+  // Tested through lib/mcp-method-gate.ts rather than src/index.ts: the entry
+  // point imports agents/mcp, which imports from `cloudflare:workers`, and
+  // Node's ESM loader refuses that scheme. That is why no test here touches the
+  // entry point — and why the rule lives in a module of its own.
   test("HEAD gets 405 with Allow, not 404", async () => {
-    const worker = (await import("../src/index")).default;
-    const res = await worker.fetch(
-      new Request("https://api.cars-data.com/mcp", { method: "HEAD" }),
-      { API_KEYS: { async get() { return null; }, async put() {} } } as never,
-      { waitUntil: () => {} } as never,
-    );
+    const { mcpMethodGate } = await import("../src/lib/mcp-method-gate");
+    const res = mcpMethodGate("HEAD")!;
     expect(res.status).toBe(405);
     expect(res.headers.get("Allow")).toBe("POST, OPTIONS");
+  });
+
+  test("every method that CAN carry a call is passed through untouched", async () => {
+    const { mcpMethodGate } = await import("../src/lib/mcp-method-gate");
+    for (const m of ["POST", "GET", "OPTIONS", "DELETE"]) {
+      expect(mcpMethodGate(m), m).toBeNull();
+    }
   });
 });
