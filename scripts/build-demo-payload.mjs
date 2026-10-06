@@ -16,6 +16,7 @@
 // to exactly the audience that is evaluating whether our data is any good.
 import postgres from "postgres";
 import { execFileSync } from "node:child_process";
+import { pipelineRunning } from "./pipeline-running.mjs";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
@@ -57,17 +58,9 @@ const KV_NAMESPACE = "4bfd13f1489b4e1482f441f4fcf33a3f"; // API_KEYS, per wrangl
 // it would have been a fourth place these 20 strings are written down.
 const LOCALES = [...SUPPORTED_LOCALES];
 
-function pipelineIsRunning() {
-  try {
-    execFileSync("pgrep", ["-f", "run-monthly.sh"], { stdio: "pipe" });
-    return true;
-  } catch {
-    return false; // pgrep exits 1 when nothing matches
-  }
-}
-
-if (pipelineIsRunning()) {
-  console.error("The monthly pipeline is running. cars_v3 is being rewritten, so any blob built now\nwould carry half-imported data. Wait for the run and the three data gates, then retry.");
+const busy = await pipelineRunning(DSN);
+if (busy.running) {
+  console.error(`cars_v3 is being written right now (${busy.what}).\nA blob built mid-import carries half-finished data to exactly the audience judging whether\nour data is any good. Wait for the run and the three data gates, then retry.`);
   process.exit(1);
 }
 
@@ -117,7 +110,15 @@ for (const locale of ONE ? [ONE] : LOCALES) {
       brand: r.brand, model: r.model, generation: r.generation,
       display_name: r.display_name,
       fuel: r.fuel, body_type: r.body_type,
-      years: [r.years_start, r.years_end].filter(Boolean).join("–") || null,
+      // `years_end = 0` is how this schema says "still in production" — 531
+      // generations carry it. `filter(Boolean)` dropped it by luck, which
+      // rendered an ongoing generation as a single year ("2026") instead of an
+      // open range. Spelled out rather than left to coincidence.
+      years: r.years_start
+        ? r.years_end && Number(r.years_end) > 0
+          ? `${r.years_start}–${r.years_end}`
+          : `${r.years_start}–`
+        : null,
       power_hp: r.power_hp,
       battery_kwh: r.battery_kwh !== null ? Number(r.battery_kwh) : null,
       price_new_eur: r.price_new_eur,

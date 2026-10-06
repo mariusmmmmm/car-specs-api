@@ -5,14 +5,15 @@
 // it can sit in front of `wrangler deploy` the way the three data gates sit in
 // front of an import. A number nobody checks is a claim.
 import postgres from "postgres";
-import { execFileSync } from "node:child_process";
+import { pipelineRunning } from "./pipeline-running.mjs";
 import { createRequire } from "node:module";
 
-try {
-  execFileSync("pgrep", ["-f", "run-monthly.sh"], { stdio: "pipe" });
-  console.error("The monthly pipeline is running — cars_v3 is mid-rewrite, so these counts are a moving target. Retry after the run.");
+const DSN = process.env.DEMO_SET_DSN ?? "postgresql://localhost:5432/cars_v3";
+const busy = await pipelineRunning(DSN);
+if (busy.running) {
+  console.error(`cars_v3 is being written right now (${busy.what}) — these counts are a moving target. Retry after the run.`);
   process.exit(1);
-} catch { /* pgrep exits 1 when nothing matches: good */ }
+}
 
 const require_ = createRequire(import.meta.url);
 let CATALOGUE, SUPPORTED_LOCALES;
@@ -24,7 +25,7 @@ try {
   process.exit(1);
 }
 
-const sql = postgres(process.env.DEMO_SET_DSN ?? "postgresql://localhost:5432/cars_v3", { max: 2 });
+const sql = postgres(DSN, { max: 2 });
 
 const checks = [
   ["variants", CATALOGUE.variants, sql`SELECT count(*)::int n FROM variants WHERE is_active`],

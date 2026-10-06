@@ -12,22 +12,24 @@
 // refuses to run while the monthly pipeline is rewriting cars_v3. A number
 // here without a passing check is a claim, not a fact.
 
-/** Measured 2026-10-04 against cars_v3, BEFORE the October pipeline run
- *  finished. Re-run scripts/verify-catalogue-facts.mjs once the run and the
- *  three data gates are through, and update here if any of them moved. */
-export const CATALOGUE_AS_OF = "2026-10-04";
+/** Measured against cars_v3 AFTER the October pipeline run, by
+ *  scripts/verify-catalogue-facts.mjs. The run moved three of them — variants
+ *  +273, generations +33 and a whole new brand (119 → 120) — which is the
+ *  guard earning its keep: without it these would have gone on being published
+ *  as the 2026-10-04 figures. Re-run it after every import. */
+export const CATALOGUE_AS_OF = "2026-10-06";
 
 export const CATALOGUE = {
   /** Active variants. SELECT count(*) FROM variants WHERE is_active. */
-  variants: 103_099,
+  variants: 103_372,
   /** Variants that actually carry a spec document. 909 active variants have no
    *  `variant_doc` row and would answer with empty specs — which is also where
    *  the old published "102,191 variants" came from: it was this number wearing
    *  the other one's label. */
   variantsWithSpecs: 102_190,
   /** Brands with at least one active variant — NOT the 527-row master list. */
-  brands: 119,
-  generations: 5_395,
+  brands: 120,
+  generations: 5_428,
   /** Spec types DEFINED in specs_catalog (all 224 are is_active). */
   specTypesDefined: 224,
   /** Spec types that actually appear in the data:

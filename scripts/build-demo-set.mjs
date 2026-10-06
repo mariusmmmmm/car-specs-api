@@ -256,10 +256,20 @@ export const DEMO_MODEL_IDS: ReadonlySet<number> = new Set([
 ${modelIds.map((i) => `  ${i},`).join("\n")}
 ]);
 
-/** What the set contains, by name — safe to print in a log or a report. */
+/** What the set contains, by name — safe to print in a log or a report.
+ *  The brands and models are a DECISION (T107 §5.1.1); only the ids are derived. */
 export const DEMO_SET_DESCRIPTION = ${JSON.stringify(
   CHOICE.map((c) => `${c.brand}: ${c.models.join(", ")}`).join(" · "),
 )};
+
+/** How many variants the set must contain. Asserted by the guard. */
+export const DEMO_SET_SIZE = ${variantIds.length};
+
+/** Readiness is DERIVED from the set, not declared beside it: a boolean next to
+ *  the data is one more thing that can disagree with it. routes/demo.ts refuses
+ *  to serve anything until these match, so an ungenerated or truncated set
+ *  fails rather than quietly serving an empty catalogue. */
+export const demoSetReady = (): boolean => DEMO_VARIANT_IDS.size === DEMO_SET_SIZE;
 `;
   fs.writeFileSync(OUT, body);
   console.log(`\nWrote ${path.relative(process.cwd(), OUT)} — ${variantIds.length} variants, ${generationIds.length} generations, ${modelIds.length} models.`);
