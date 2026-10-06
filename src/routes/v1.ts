@@ -7,6 +7,7 @@ import { variants } from "./variants";
 import { search } from "./search";
 import { compare } from "./compare";
 import { keys } from "./keys";
+import { keysDemo } from "./keys-demo";
 import { admin } from "./admin";
 import { usage } from "./usage";
 import { exportRoute } from "./export";
@@ -28,6 +29,10 @@ v1.get("/health", async (c) => {
     ),
   );
 });
+// Self-serve demo keys, mounted BEFORE /keys so "/keys/demo" is not swallowed
+// by the reviewed-request handler. Public by design: the whole point is that
+// review leaves the critical path for people who only want to see it answer.
+v1.route("/keys/demo", keysDemo);
 v1.route("/keys", keys);
 // Owner-only, behind ADMIN_TOKEN (404 without it) — not part of the public API.
 v1.route("/admin", admin);

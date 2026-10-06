@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context, Next } from "hono";
 import type { Env } from "../types";
 import { envelope, problem } from "../lib/response";
 import { sha256Hex, type KeyRequest } from "../lib/apikey";
@@ -21,7 +22,10 @@ export const REQUESTS_PER_IP_PER_DAY = 3;
 // proxy would put every request on the site's one IP). CORS is not a guard —
 // curl ignores it — the review is.
 const FORM_ORIGINS = /^https:\/\/(www\.)?cars-data\.com$|^http:\/\/localhost:\d+$/;
-keys.use("*", async (c, next) => {
+
+/** Shared with routes/keys-demo.ts — one copy of the origin rule, because two
+ *  would drift and the second one would be the permissive one. */
+export const formCors = async (c: Context<{ Bindings: Env }>, next: Next) => {
   const origin = c.req.header("Origin") ?? "";
   const allowed = FORM_ORIGINS.test(origin);
   if (c.req.method === "OPTIONS") {
@@ -37,7 +41,9 @@ keys.use("*", async (c, next) => {
     c.res.headers.set("Access-Control-Allow-Origin", origin);
     c.res.headers.append("Vary", "Origin");
   }
-});
+};
+
+keys.use("*", formCors);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
