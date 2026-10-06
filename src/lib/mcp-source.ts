@@ -5,7 +5,7 @@ import { localizeVariantSpecs } from "./localize-variant";
 import { loadDemoPayload, type DemoVariant } from "./demo-payload";
 import { demoSetReady } from "./demo-set";
 
-// Two ways to answer an MCP tool, behind one shape (T107).
+// Two ways to answer an MCP tool, behind one shape (T111).
 //
 // Without this seam the demo branch would be an `if` inside each of the six
 // tools, and the sixth one added later would forget. With it, an anonymous

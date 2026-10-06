@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// T107 — renders the demo tier into KV, one blob per locale.
+// T111 — renders the demo tier into KV, one blob per locale.
 //
 // The demo tier is served from these blobs and never from Postgres, which is
 // what makes its scope structural rather than a check (see src/routes/demo.ts).

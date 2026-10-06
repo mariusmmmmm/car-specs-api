@@ -10,7 +10,7 @@ import { decodeId } from "./public-id";
 // its own keyset cursor (also opaque); the contract is identical either way.
 export const PAGE_LIMIT = 50;
 
-// The cursor is an opaque token (T107), for the same reason the ids are: the
+// The cursor is an opaque token (T111), for the same reason the ids are: the
 // /v1/variants filter uses a KEYSET cursor whose value is the last row's
 // variant_id, so a published cursor hands back one real id per page.
 // An unreadable cursor restarts from the first page rather than 400-ing — a

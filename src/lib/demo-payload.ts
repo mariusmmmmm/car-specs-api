@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 
 // The demo tier is served from a pre-rendered blob in KV, one per locale, and
-// NEVER from Postgres (T107 §5.0.2).
+// NEVER from Postgres (T111 §5.0.2).
 //
 // Three things fall out of that, and the third is the point:
 //   * `cars_api_readonly` has CONNECTION LIMIT 10 — the only genuinely scarce

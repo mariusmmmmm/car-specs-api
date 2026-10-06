@@ -2,7 +2,7 @@ import type { Context, Next } from "hono";
 import type { Env, Variables } from "../types";
 import { encodeId, decodeId, type IdKind } from "../lib/public-id";
 
-// ONE gate for the whole protected surface, not one per route (T107).
+// ONE gate for the whole protected surface, not one per route (T111).
 //
 // Every route projects its own rows, so rewriting ids route by route means the
 // next route someone adds leaks real `public_id` values and nothing notices —

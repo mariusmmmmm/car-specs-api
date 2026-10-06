@@ -22,7 +22,7 @@ export type Env = {
   // INBOX_INGEST_TOKEN is a secret; INBOX_INGEST_URL defaults to production.
   INBOX_INGEST_TOKEN?: string;
   INBOX_INGEST_URL?: string;
-  // T107: the key that turns `variants.public_id` into an opaque token
+  // T111: the key that turns `variants.public_id` into an opaque token
   // (lib/public-id.ts). Optional in the TYPE only because every other secret
   // here is — the code does NOT degrade: a missing ID_TOKEN_KEY throws
   // MissingIdSecret rather than minting tokens from a built-in default, which
@@ -38,7 +38,7 @@ export type McpProps = {
   ua?: string;
   /** First 8 hex chars of the authenticated key's hash — telemetry actor. */
   keyPrefix?: string;
-  /** True for an anonymous caller on the demo scope (T107 D9). No key, no
+  /** True for an anonymous caller on the demo scope (T111 D9). No key, no
    *  database connection: the tools are answered from the pre-rendered blob. */
   demo?: boolean;
   /** Locale the blob should be read in, when `demo`. */

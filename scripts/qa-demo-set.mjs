@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Gate on the frozen demo set (T107 criterion 14).
+// Gate on the frozen demo set (T111 criterion 14).
 //
 //   node scripts/qa-demo-set.mjs --self-test
 //

@@ -37,7 +37,7 @@ const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 protectedV1.use("*", requireApiKey);
 
 // A demo key is answered entirely from the pre-rendered blob in KV and never
-// reaches the routes below (T107). Dispatching here, rather than checking a
+// reaches the routes below (T111). Dispatching here, rather than checking a
 // scope allowlist inside each route, is what makes the guarantee structural:
 // a demo request is never handed a database connection, so there is nothing
 // outside the 40-car blob for it to read. A route that forgets to consult an
@@ -51,7 +51,7 @@ protectedV1.use("*", async (c, next) => {
 });
 
 // Internal ids never leave: one gate on the way out instead of one rewrite per
-// route, so the next route someone adds cannot forget (T107). Mounted after the
+// route, so the next route someone adds cannot forget (T111). Mounted after the
 // demo dispatch because routes/demo.ts already hands back tokens.
 protectedV1.use("*", opaqueIds);
 // Usage observability (BIZ-D7 §5): one datapoint per authenticated REST call,

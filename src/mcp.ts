@@ -18,7 +18,7 @@ function json(value: unknown, isError = false) {
 // Thin MCP wrapper over the same /v1 read-model (lib/queries.ts, lib/localize-variant.ts)
 // — no separate query logic, per BIZ-L2b-mcp-apify-distribution.md §1.
 //
-// Two kinds of caller reach it (T107):
+// Two kinds of caller reach it (T111):
 //   * a key holder, authenticated in index.ts with the same gate as REST (T73);
 //   * an ANONYMOUS caller on the demo scope, which gets a source backed by the
 //     pre-rendered blob and no database connection at all.

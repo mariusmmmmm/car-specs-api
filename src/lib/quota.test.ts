@@ -90,10 +90,10 @@ describe("daily cap — how FAST a key may spend its month", () => {
   });
 });
 
-// ── T107: the service-wide ceiling ───────────────────────────────────────────
+// ── T111: the service-wide ceiling ───────────────────────────────────────────
 const TODAY = new Date().toISOString().slice(0, 10);
 
-describe("service-wide daily ceiling (T107 M1)", () => {
+describe("service-wide daily ceiling (T111 M1)", () => {
   // Per-key caps provably do not bound a GROUP. On 30–31 August every one of
   // 139 keys stayed inside its own cap and the catalogue left anyway. This is
   // the only limit a new credential cannot defeat by existing.

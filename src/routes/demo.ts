@@ -6,7 +6,7 @@ import { demoSetReady, DEMO_SET_DESCRIPTION } from "../lib/demo-set";
 import { loadDemoPayload, type DemoPayload, type DemoVariant } from "../lib/demo-payload";
 import { encodeId, decodeId } from "../lib/public-id";
 
-// Everything a demo key can reach (T107). Mounted AHEAD of the database routes
+// Everything a demo key can reach (T111). Mounted AHEAD of the database routes
 // and short-circuits them, so a demo request never receives a Postgres
 // connection. Its scope is not enforced here — it is structural: the blob holds
 // 40 cars and there is no code path from here to anything else.
@@ -106,7 +106,7 @@ demo.get("/variants/:id/specs", async (c) => {
   );
 });
 
-// Images ARE in the demo (T107 §5.1). The earlier plan excluded them because
+// Images ARE in the demo (T111 §5.1). The earlier plan excluded them because
 // the image module is the dearest one (€1.490) and the only one served from R2
 // — true under a QUOTA model, where a key can walk the whole catalogue's
 // images. Under a fixed set it is 40 cars' worth, cached at the edge forever,
