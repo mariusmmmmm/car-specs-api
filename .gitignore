@@ -7,3 +7,9 @@ dist/
 .mcp-registry-auth/
 .tsbuild/
 .demo-payload/
+
+# Prod-active variant ids, cached for scripts/build-demo-set.mjs. Derived from a
+# query against cars_prod and STALE after every data deploy, so it is not
+# committed: a stale copy would let the generator freeze a set quietly against
+# yesterday's catalogue. The refresh one-liner is in the generator's header.
+.demo-prod-ids.txt
