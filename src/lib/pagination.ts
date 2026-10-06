@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { Env } from "../types";
+import type { Env, Variables } from "../types";
 import { decodeId } from "./public-id";
 
 // Uniform list pagination (all list endpoints, per owner decision 2026-07-27):
@@ -16,11 +16,20 @@ export const PAGE_LIMIT = 50;
 // An unreadable cursor restarts from the first page rather than 400-ing — a
 // client holding one across a key rotation should page again, not break.
 export async function parsePaging(
-  c: Context<{ Bindings: Env }>,
+  c: Context<{ Bindings: Env; Variables: Variables }>,
 ): Promise<{ limit: number; offset: number }> {
   const limit = Math.min(Math.max(Number(c.req.query("limit")) || PAGE_LIMIT, 1), PAGE_LIMIT);
-  const raw = c.req.query("cursor");
-  const decoded = raw ? await decodeId(c.env.ID_TOKEN_KEY, "cursor", raw) : 0;
+  const raw = c.req.query("cursor")?.trim();
+  if (!raw) return { limit, offset: 0 };
+  // The apify plan keeps RAW ids and cursors (see middleware/opaque-ids.ts for
+  // why). Decoding its plain-number cursor as a token would fail and silently
+  // restart at page 1 — a wrong answer dressed as a right one, on the surface
+  // that makes 956 of its calls.
+  if (c.get("apiKeyRecord")?.plan === "apify") {
+    const n = /^\d{1,9}$/.test(raw) ? Number(raw) : 0;
+    return { limit, offset: Math.max(n, 0) };
+  }
+  const decoded = await decodeId(c.env.ID_TOKEN_KEY, "cursor", raw);
   return { limit, offset: Math.max(decoded ?? 0, 0) };
 }
 

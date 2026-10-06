@@ -44,8 +44,31 @@ export async function encodeTree(secret: string | undefined, node: unknown): Pro
   return out;
 }
 
+/** The `apify` plan keeps RAW integer ids, in both directions.
+ *
+ *  Not a loophole — a measured one-line exception, taken because the
+ *  alternative was shipping a break into a live paid product. The Apify Actor
+ *  declares `variantId` as `"type": "integer"` in .actor/input_schema.json and
+ *  interpolates whatever the user typed straight into the URL, with
+ *  "A variant_id from a prior search/filter run" as its help text. Tokens break
+ *  it BOTH ways: the Actor cannot accept `v_a7afb0ae` (Apify's own input
+ *  validation rejects a non-integer) and a user cannot feed back an id the
+ *  Actor wrote into its dataset.
+ *
+ *  What makes the exception safe is where the risk actually was: the August
+ *  extraction ran on FREE keys. The apify plan is metered and billed
+ *  per-result by Apify, so pulling the catalogue through it costs the puller
+ *  money per row — the business model is the defence there, not obscurity.
+ *
+ *  Remove this once the Actor's input schema takes a string. Until then an id
+ *  is opaque per PLAN, which is worth knowing when reading two responses side
+ *  by side. */
+const RAW_IDS_PLAN = "apify";
+
 export async function opaqueIds(c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) {
   await next();
+
+  if (c.get("apiKeyRecord")?.plan === RAW_IDS_PLAN) return;
 
   const type = c.res.headers.get("content-type") ?? "";
   if (!type.includes("json")) return;
@@ -71,23 +94,42 @@ export async function opaqueIds(c: Context<{ Bindings: Env; Variables: Variables
 /** Request side. Returns null for a missing, malformed or wrong-kind token, and
  *  callers turn that into the same 404 an unknown id gets — so a guessed token
  *  and a car that does not exist look identical from outside. */
-export function readId(c: Context<{ Bindings: Env }>, kind: IdKind, param = "id"): Promise<number | null> {
-  return decodeId(c.env.ID_TOKEN_KEY, kind, c.req.param(param) ?? "");
+export function readId(
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  kind: IdKind,
+  param = "id",
+): Promise<number | null> {
+  const raw = (c.req.param(param) ?? "").trim();
+  if (c.get("apiKeyRecord")?.plan === RAW_IDS_PLAN) return Promise.resolve(rawInt(raw));
+  return decodeId(c.env.ID_TOKEN_KEY, kind, raw);
 }
 
-export async function readCursor(c: Context<{ Bindings: Env }>): Promise<number> {
+/** A bare positive integer, or null. Deliberately strict: "12e3", "0x2a" and
+ *  " 42 " with inner junk must not slip through as ids. */
+function rawInt(s: string): number | null {
+  if (!/^\d{1,9}$/.test(s)) return null;
+  const n = Number(s);
+  return n > 0 ? n : null;
+}
+
+export async function readCursor(c: Context<{ Bindings: Env; Variables: Variables }>): Promise<number> {
   const raw = c.req.query("cursor");
   if (!raw) return 0;
+  if (c.get("apiKeyRecord")?.plan === RAW_IDS_PLAN) return rawInt(raw) ?? 0;
   const n = await decodeId(c.env.ID_TOKEN_KEY, "cursor", raw);
   // An unreadable cursor restarts from the beginning rather than 400-ing: a
   // client that kept a cursor across a key rotation should page again, not break.
   return n ?? 0;
 }
 
-export async function readIdList(c: Context<{ Bindings: Env }>, kind: IdKind, query: string): Promise<(number | null)[]> {
+export async function readIdList(
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  kind: IdKind,
+  query: string,
+): Promise<(number | null)[]> {
   const raw = c.req.query(query);
   if (!raw) return [];
-  return Promise.all(
-    raw.split(",").map((t) => decodeId(c.env.ID_TOKEN_KEY, kind, t)),
-  );
+  const parts = raw.split(",").map((t) => t.trim());
+  if (c.get("apiKeyRecord")?.plan === RAW_IDS_PLAN) return parts.map(rawInt);
+  return Promise.all(parts.map((t) => decodeId(c.env.ID_TOKEN_KEY, kind, t)));
 }

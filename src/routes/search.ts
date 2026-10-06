@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import type { Env } from "../types";
+import type { Env, Variables } from "../types";
 import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
 import { parsePaging, nextLink } from "../lib/pagination";
 import { searchVariants } from "../lib/queries";
 
-export const search = new Hono<{ Bindings: Env }>();
+export const search = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Simplified port of v3/lib/server/search.ts's trigram matching: same
 // f_unaccent_lower/f_unaccent_alnum columns, single-phrase match instead of

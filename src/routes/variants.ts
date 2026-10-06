@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { Env } from "../types";
+import type { Env, Variables } from "../types";
 import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
@@ -9,7 +9,7 @@ import { maxSyncedAt } from "../lib/meta";
 import { filterVariants, getVariantImages, variantExists } from "../lib/queries";
 import { readId, readCursor } from "../middleware/opaque-ids";
 
-export const variants = new Hono<{ Bindings: Env }>();
+export const variants = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 variants.get("/", async (c) => {
   const sql = getDb(c.env);

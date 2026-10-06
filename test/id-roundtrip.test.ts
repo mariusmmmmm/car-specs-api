@@ -28,7 +28,7 @@ const { encodeId } = await import("../src/lib/public-id");
 const SECRET = "test-secret-at-least-16-chars-long";
 const env = { ID_TOKEN_KEY: SECRET, HYPERDRIVE: {} } as never;
 
-describe("opaque ids survive a round trip (T107)", () => {
+describe("opaque ids survive a round trip (T111)", () => {
   test("a variant token sent back resolves to the original id", async () => {
     const token = await encodeId(SECRET, "variant", 103_099);
     await variants.fetch(new Request(`http://x/${token}/specs`), env);
@@ -42,7 +42,7 @@ describe("opaque ids survive a round trip (T107)", () => {
   });
 
   test("a RAW integer id is no longer accepted — the old contract is closed", async () => {
-    // Someone replaying a pre-T107 URL must get a clean 404, not a silent hit.
+    // Someone replaying a pre-T111 URL must get a clean 404, not a silent hit.
     const res = await variants.fetch(new Request("http://x/103099/specs"), env);
     expect(res.status).toBe(404);
   });

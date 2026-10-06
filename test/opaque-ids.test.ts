@@ -19,7 +19,7 @@ function app(body: unknown, status = 200) {
 
 const get = (body: unknown, status?: number) => app(body, status).fetch(new Request("http://x/"), env);
 
-describe("opaque ids — one gate on the way out (T107)", () => {
+describe("opaque ids — one gate on the way out (T111)", () => {
   test("rewrites variant_id, generation_id and model_id wherever they sit", async () => {
     const res = await get(envelope(
       { variant_id: 42, generation_id: 7, model_id: 3, display_name: "x" },
@@ -95,5 +95,42 @@ describe("opaque ids — one gate on the way out (T107)", () => {
     const res = await a.fetch(new Request("http://x/"), {} as never);
     expect(res.status).toBe(500);
     expect(await res.text()).not.toContain("42");
+  });
+});
+
+describe("the apify plan keeps RAW ids — a live paid product must not break", () => {
+  // The Actor declares variantId as "type": "integer" in its Apify input
+  // schema and interpolates the user's value straight into the URL. Tokens
+  // break it both ways: it cannot accept v_a7afb0ae, and a user cannot feed
+  // back an id it wrote into a dataset. The free tier — which is where the
+  // August extraction ran — still gets tokens.
+  function appWithPlan(plan: string, body: unknown) {
+    const a = new Hono<{ Bindings: typeof env; Variables: { apiKeyRecord: { plan: string } } }>();
+    a.use("*", async (c, next) => { c.set("apiKeyRecord", { plan } as never); await next(); });
+    a.use("*", opaqueIds as never);
+    a.get("/", (c) => c.json(body as never));
+    return a;
+  }
+
+  test("an apify response keeps integer ids and a plain cursor", async () => {
+    const res = await appWithPlan("apify", envelope([{ variant_id: 42164 }], { last_synced_at: "n" }, { next: "42164" }))
+      .fetch(new Request("http://x/"), env);
+    const text = await res.text();
+    expect(text).toContain('"variant_id":42164');
+    expect(text).toContain('"next":"42164"');
+  });
+
+  test("a free response on the very same body gets tokens", async () => {
+    const res = await appWithPlan("free", envelope([{ variant_id: 42164 }], { last_synced_at: "n" }, { next: "42164" }))
+      .fetch(new Request("http://x/"), env);
+    const text = await res.text();
+    expect(text).not.toContain("42164");
+    expect(text).toMatch(/"variant_id":"v_[0-9a-f]{8}"/);
+  });
+
+  test("a demo response gets tokens too", async () => {
+    const res = await appWithPlan("demo", envelope([{ variant_id: 42164 }], { last_synced_at: "n" }))
+      .fetch(new Request("http://x/"), env);
+    expect(await res.text()).not.toContain("42164");
   });
 });

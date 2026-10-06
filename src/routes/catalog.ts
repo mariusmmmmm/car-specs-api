@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { Env } from "../types";
+import type { Env, Variables } from "../types";
 import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
@@ -8,7 +8,7 @@ import { parsePaging, nextLink } from "../lib/pagination";
 import { readId } from "../middleware/opaque-ids";
 import { listGenerationsForModel } from "../lib/queries";
 
-export const catalog = new Hono<{ Bindings: Env }>();
+export const catalog = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 catalog.get("/brands", async (c) => {
   const sql = getDb(c.env);

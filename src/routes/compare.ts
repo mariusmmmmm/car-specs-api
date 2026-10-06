@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import type { Env } from "../types";
+import type { Env, Variables } from "../types";
 import { getDb } from "../lib/db";
 import { envelope, problem } from "../lib/response";
 import { resolveLocale } from "../lib/locale";
 import { localizeVariantSpecs } from "../lib/localize-variant";
 import { readIdList } from "../middleware/opaque-ids";
 
-export const compare = new Hono<{ Bindings: Env }>();
+export const compare = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 compare.get("/", async (c) => {
   const idsParam = c.req.query("ids");
