@@ -13,7 +13,7 @@ import { encodeId, decodeId } from "../lib/public-id";
 export const demo = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 const UPGRADE =
-  "The demo covers 40 cars. A reviewed key covers all 103,099, and licensed exports are at https://cars-data.com/en/api.";
+  "The demo covers 40 cars — the only self-serve tier. The full catalogue is a licensed export: https://cars-data.com/en/api";
 
 /** 503, not 404 or an empty list. A demo that answers "no cars" to whoever is
  *  evaluating us reads as a broken catalogue, and that is the one impression

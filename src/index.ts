@@ -56,7 +56,7 @@ export default {
         if (!gate.ok) {
           recordMcpThrottled(env, iph, "quota");
           const { body, status, headers } = gate.reason === "rate"
-            ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute. A free reviewed key raises this: https://cars-data.com/en/api/for-ai-agents")
+            ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute. A free key raises it: https://cars-data.com/en/api/for-ai-agents")
             : problem(503, "Service Unavailable", "Request metering is temporarily unavailable. Retry shortly.");
           return new Response(JSON.stringify(body), { status, headers: { ...headers, "Retry-After": "60" } });
         }

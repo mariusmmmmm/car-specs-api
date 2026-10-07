@@ -90,7 +90,11 @@ describe("demo tier — served from KV, never from Postgres (T111)", () => {
     const token = await encodeId(SECRET, "variant", 77_777);
     const res = await call(`/variants/${token}/specs`);
     expect(res.status).toBe(403);
-    expect((await res.json()).detail).toMatch(/103,099/);
+    // Asserts the upgrade PATH, not a number: the catalogue count moves with
+    // every import, and a test pinned to it fails for the wrong reason.
+    const { detail } = await res.json();
+    expect(detail).toMatch(/licensed export/i);
+    expect(detail).toContain("cars-data.com/en/api");
   });
 
   test("A GUESSED token is indistinguishable from a car outside the set", async () => {

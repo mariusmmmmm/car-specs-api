@@ -78,14 +78,14 @@ export class CarsDataMCP extends McpAgent<Env> {
         {
           error:
             "The demo dataset is briefly unavailable. Nothing is wrong with your request — retry shortly. " +
-            "A reviewed key covers the whole catalogue: https://cars-data.com/en/api/for-ai-agents",
+            "The full catalogue is a licensed export: https://cars-data.com/en/api",
         },
         true,
       );
     const notInDemo = (what: string) =>
       json(
         {
-          error: `${what} is outside the demo set (40 cars). A reviewed key covers all ${n(CATALOGUE.variants)}: https://cars-data.com/en/api/for-ai-agents`,
+          error: `${what} is outside the demo set (40 cars) — the only self-serve tier. All ${n(CATALOGUE.variants)} variants are licensed as an export: https://cars-data.com/en/api`,
         },
         true,
       );
@@ -98,7 +98,7 @@ export class CarsDataMCP extends McpAgent<Env> {
           `${CATALOGUE.locales} languages. Returns candidate variant_ids to pass to ` +
           "get_specs/get_images/compare_variants. Each result carries generation_id and production years so " +
           "same-named variants from different generations can be told apart. " +
-          "Without an API key this answers from a fixed 40-car demo set; a free reviewed key opens the whole catalogue.",
+          "Without an API key this answers from a fixed 40-car demo set, which is also what a free key covers; the full catalogue is a licensed export.",
         inputSchema: {
           query: z.string().describe("e.g. 'bmw 3 series' or 'tesla model s'"),
           locale: localeSchema,
