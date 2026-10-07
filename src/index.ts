@@ -1,6 +1,5 @@
-import { Hono } from "hono";
 import type { Env } from "./types";
-import { v1 } from "./routes/v1";
+import { app } from "./app";
 import { problem } from "./lib/response";
 import { CarsDataMCP } from "./mcp";
 import { authenticate, readApiKey } from "./lib/auth-key";
@@ -10,21 +9,6 @@ import { mcpMethodGate } from "./lib/mcp-method-gate";
 import type { McpProps } from "./types";
 
 export { CarsDataMCP };
-
-const app = new Hono<{ Bindings: Env }>();
-
-app.route("/v1", v1);
-
-app.notFound((c) => {
-  const { body, status, headers } = problem(404, "Not Found", `No route for ${c.req.path}`);
-  return c.json(body, status, headers);
-});
-
-app.onError((err, c) => {
-  console.error(err);
-  const { body, status, headers } = problem(500, "Internal Server Error");
-  return c.json(body, status, headers);
-});
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
