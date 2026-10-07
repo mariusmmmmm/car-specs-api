@@ -4,8 +4,6 @@ export type Env = {
   HYPERDRIVE: Hyperdrive;
   API_KEYS: KVNamespace;
   USAGE: AnalyticsEngineDataset;
-  ENVIRONMENT: string;
-  X402_ENABLED: string;
   // Secret (wrangler secret put IP_HASH_SALT); .dev.vars for local. Optional so
   // a missing secret degrades to a fixed fallback salt instead of crashing.
   IP_HASH_SALT?: string;
