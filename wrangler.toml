@@ -20,10 +20,6 @@ localConnectionString = "postgresql://mmalaias-mac:localdev@127.0.0.1:5432/cars_
 binding = "API_KEYS"
 id = "4bfd13f1489b4e1482f441f4fcf33a3f"
 
-[vars]
-ENVIRONMENT = "development"
-X402_ENABLED = "false"
-
 # Remote MCP server (L2b) — streamable HTTP, backed by a SQLite Durable
 # Object per the Cloudflare Agents SDK's McpAgent pattern. Stateless from our
 # read-model's point of view (each tool call is a plain Hyperdrive read);
