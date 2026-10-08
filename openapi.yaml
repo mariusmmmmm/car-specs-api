@@ -528,7 +528,7 @@ components:
     Usage:
       type: object
       properties:
-        plan: { type: string, enum: [free, apify, x402] }
+        plan: { type: string, enum: [demo, apify, x402] }
         used: { type: integer }
         quota: { type: integer }
         resets_at: { type: string, format: date-time }

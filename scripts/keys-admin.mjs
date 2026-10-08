@@ -11,8 +11,13 @@
 // into being — the deliberate path for saying yes to someone who needs the full
 // catalogue, which the public cannot self-serve at any price in requests.
 //
-//   node scripts/keys-admin.mjs keys                       every key that exists, with status
-//   node scripts/keys-admin.mjs grant <email> [plan]       plan: free (default) | demo | apify
+// The `free` plan is GONE (owner decision D-01, 2026-10-08: only DEMO and
+// paid exist). `grant` will not send it and the Worker would refuse it anyway.
+// `plan` is now required: it used to default to free, so the retired tier was
+// what you got by stopping typing one word early.
+//
+//   node scripts/keys-admin.mjs keys                        every key that exists, with status
+//   node scripts/keys-admin.mjs grant <email> <plan>        plan: demo | apify
 //   node scripts/keys-admin.mjs approve-key <hash-prefix>   re-enable a key
 //   node scripts/keys-admin.mjs revoke-key  <hash-prefix>
 //
@@ -51,8 +56,13 @@ async function call(method, p) {
 const [cmd, arg, arg2] = process.argv.slice(2);
 switch (cmd) {
   case "grant": {
-    if (!arg) { console.error("usage: keys-admin.mjs grant <email> [free|demo|apify]"); process.exit(1); }
-    const plan = arg2 ?? "free";
+    const plan = arg2;
+    if (!arg || !plan) { console.error("usage: keys-admin.mjs grant <email> <demo|apify>"); process.exit(1); }
+    if (plan === "free") {
+      console.error("The `free` plan was retired on 2026-10-08 (D-01): only DEMO and paid exist.\n  Use `demo` for an evaluation key, or `apify` for the paid channel.");
+      process.exit(1);
+    }
+    if (plan !== "demo" && plan !== "apify") { console.error(`Unknown plan "${plan}" — must be demo or apify.`); process.exit(1); }
     const r = await call("POST", `/grant?email=${encodeURIComponent(arg)}&plan=${encodeURIComponent(plan)}`);
     console.log(r.emailed
       ? `Granted ${plan} to ${r.email}: key ${r.key_hash_prefix}… emailed.`
@@ -72,5 +82,10 @@ switch (cmd) {
     break;
   }
   default:
-    console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 14).join("\n"));
+    // Everything from line 2 to the end of the header comment: anchored on the
+    // comment itself, not a hard-coded length, which had already drifted and
+    // was hiding `grant` from its own --help.
+    const src = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n");
+    const end = src.findIndex((l, i) => i > 1 && !l.startsWith("//"));
+    console.log(src.slice(1, end).join("\n"));
 }

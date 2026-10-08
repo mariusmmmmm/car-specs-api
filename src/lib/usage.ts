@@ -4,7 +4,8 @@
 //   blob1 = surface     ("mcp" | "rest" | "mcp-throttled")
 //   blob2 = tool/route  (tool name, or matched REST route pattern)
 //   blob3 = locale
-//   blob4 = client/plan (MCP clientInfo.name, or REST plan free|apify)
+//   blob4 = client/plan (MCP clientInfo.name, or REST plan demo|apify;
+//           historical rows also carry the retired `free`)
 //   blob5 = actor       (salted IP hash for MCP, or key-hash prefix for REST)
 //   double1 = 1         (one call; SUM(_sample_interval) reconstructs true count)
 import type { Env } from "../types";

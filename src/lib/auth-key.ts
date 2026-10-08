@@ -70,7 +70,7 @@ export async function authenticate(env: Env, rawKey: string | null): Promise<Aut
             // Says plainly that the caller did nothing wrong. Hiding a
             // service-wide ceiling behind "slow down" would send an integrator
             // hunting a bug in their own client.
-            ? "The service-wide daily limit for free catalogue access has been reached — this is not a limit on your key. It resets at 00:00 UTC. Licensed exports are not rate-limited: https://cars-data.com/en/api."
+            ? "The service-wide daily limit for unlicensed catalogue access has been reached — this is not a limit on your key. It resets at 00:00 UTC. Licensed exports are not rate-limited: https://cars-data.com/en/api."
             : "Rate limit exceeded — slow down and retry shortly.",
     };
   }
