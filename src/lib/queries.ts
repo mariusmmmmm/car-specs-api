@@ -100,7 +100,7 @@ export async function listGenerationsForModel(
 ) {
   const rows = await sql<
     {
-      id: number;
+      generation_id: number;
       model_id: number;
       slug: string;
       name: string;
@@ -108,8 +108,11 @@ export async function listGenerationsForModel(
       years_end: number | null;
       last_synced_at: Date | null;
     }[]
+  // Aliased generation_id, never id: the response gate
+  // (middleware/opaque-ids.ts) tokenises by FIELD NAME, so an id projected as
+  // `id` escapes the gate as a raw public_id (T157).
   >`
-    SELECT g.public_id::int AS id, m.public_id::int AS model_id, g.canonical_slug AS slug,
+    SELECT g.public_id::int AS generation_id, m.public_id::int AS model_id, g.canonical_slug AS slug,
            COALESCE(gt.display_name, g.display_name) AS name,
            g.years_start, g.years_end, g.last_synced_at
     FROM generations g

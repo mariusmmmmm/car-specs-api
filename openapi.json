@@ -387,7 +387,8 @@
       },
       "Generation": {
         "properties": {
-          "id": {
+          "generation_id": {
+            "description": "Opaque generation token. Pass it to /generations/{id}/variants. Renamed from `id` in T157, for the same reason as Model.model_id.",
             "example": "g_1a2b3c4d",
             "type": "string"
           },
@@ -563,9 +564,11 @@
       "Model": {
         "properties": {
           "brand_id": {
+            "description": "Brand public id. Brands are not tokenised — see Brand.id.",
             "type": "integer"
           },
-          "id": {
+          "model_id": {
+            "description": "Opaque model token. Pass it straight to /models/{id}/generations. Until T157 this field was called `id` and carried the raw internal public_id as an integer — which no route would accept back, so the drill-down was unreachable. The field was renamed, not re-typed: `id` is gone from this object.",
             "example": "m_1a2b3c4d",
             "type": "string"
           },
