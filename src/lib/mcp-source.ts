@@ -1,4 +1,5 @@
 import type { Env, McpProps } from "../types";
+import type { KeyRecord } from "./apikey";
 import { getDb } from "./db";
 import { searchVariants, listGenerationsForModel, filterVariants, getVariantImages } from "./queries";
 import { localizeVariantSpecs } from "./localize-variant";
@@ -135,6 +136,19 @@ export async function demoSource(env: Env, locale: string): Promise<McpSource | 
 
 /** Which filter keys the demo blob cannot honour, so a tool can say so. */
 export const DEMO_UNSUPPORTED_FILTERS = ["drive", "year"] as const;
+
+/** Who is on the demo scope, decided in ONE place (T165).
+ *
+ *  `null` = no key at all: the anonymous demo (T111 D9). A `demo`-plan key is
+ *  the same scope by a different door, and until T165 it was not treated as
+ *  one: index.ts built props with no `demo` for every authenticated key, so
+ *  sourceFor() fell through to dbSource() and the self-serve key reached the
+ *  whole catalogue through /mcp. REST never had the hole because routes/v1.ts
+ *  dispatches on exactly this fact — which is why it lives here as a function
+ *  both surfaces can state, and a test can execute, rather than as an `if`
+ *  inside index.ts that no test can import. */
+export const isDemoScope = (record: Pick<KeyRecord, "plan"> | null): boolean =>
+  record === null || record.plan === "demo";
 
 export async function sourceFor(env: Env, props: McpProps): Promise<McpSource | null> {
   return props.demo ? demoSource(env, props.locale ?? "en") : dbSource(env);

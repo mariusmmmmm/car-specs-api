@@ -38,8 +38,12 @@ export type McpProps = {
   ua?: string;
   /** First 8 hex chars of the authenticated key's hash — telemetry actor. */
   keyPrefix?: string;
-  /** True for an anonymous caller on the demo scope (T111 D9). No key, no
-   *  database connection: the tools are answered from the pre-rendered blob. */
+  /** True when this call is on the demo scope: an anonymous caller (T111 D9)
+   *  OR a holder of a `demo`-plan key (T165). Either way the tools are
+   *  answered from the pre-rendered blob and no database connection is handed
+   *  out. Set in index.ts, the only place a plan is known on this surface;
+   *  lib/mcp-source.ts dispatches on it the way routes/v1.ts dispatches on
+   *  `plan === "demo"`. */
   demo?: boolean;
   /** Locale the blob should be read in, when `demo`. */
   locale?: string;

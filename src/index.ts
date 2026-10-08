@@ -7,6 +7,7 @@ import { authenticate, readApiKey } from "./lib/auth-key";
 import { checkAnonDemoRate } from "./lib/quota";
 import { ipHash, recordMcpThrottled } from "./lib/usage";
 import { mcpMethodGate } from "./lib/mcp-method-gate";
+import { isDemoScope } from "./lib/mcp-source";
 import type { McpProps } from "./types";
 
 export { CarsDataMCP };
@@ -56,14 +57,19 @@ export default {
         if (!gate.ok) {
           recordMcpThrottled(env, iph, "quota");
           const { body, status, headers } = gate.reason === "rate"
-            ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute. A free key raises it: https://cars-data.com/en/api/for-ai-agents")
+            // Does NOT offer a key as the remedy. It used to ("a free key
+            // raises it"), and that was wrong twice over after T165: there is
+            // no free tier any more, and a demo key is the SAME 40-car scope
+            // at a LOWER per-minute ceiling (10 vs 20 here) — so the advice
+            // sent an agent to a form to get slower.
+            ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute — retry shortly. This surface covers a fixed 40-car demo set; the full catalogue is a licensed export: https://cars-data.com/en/api")
             : problem(503, "Service Unavailable", "Request metering is temporarily unavailable. Retry shortly.");
           return new Response(JSON.stringify(body), { status, headers: { ...headers, "Retry-After": "60" } });
         }
         const props: McpProps = {
           ipHash: iph,
           ua: request.headers.get("user-agent") ?? undefined,
-          demo: true,
+          demo: isDemoScope(null),
         };
         (ctx as ExecutionContext & { props?: McpProps }).props = props;
         return CarsDataMCP.serve("/mcp").fetch(request, env, ctx);
@@ -89,10 +95,25 @@ export default {
       // Carry the hashed IP + UA + key prefix into the McpAgent DO via
       // ctx.props so per-tool-call telemetry can attribute a call without the
       // raw IP or key ever crossing into the DO.
+      //
+      // `demo` is carried too, and it is NOT telemetry (T165). Until it was,
+      // the demo scope held on /v1 and on anonymous /mcp but had a hole
+      // exactly here: props were built without it for ANY authenticated key,
+      // so sourceFor() fell through to dbSource() and a demo-plan key — the
+      // one thing anyone can self-issue from a form — reached the whole
+      // catalogue through search_cars/filter_cars/get_specs. The REST side
+      // dispatches on the same fact (routes/v1.ts: plan === "demo" → the
+      // blob); this is that dispatch, for the other surface.
+      //
+      // It is also what the quota table already assumes: demo is 2.000/day,
+      // ~10x free, and lib/quota.ts says in writing that this is safe because
+      // "a demo key can only ever resolve the 40 variants". That sentence was
+      // false on /mcp.
       const props: McpProps = {
         ipHash: iph,
         ua: request.headers.get("user-agent") ?? undefined,
         keyPrefix: auth.keyHash.slice(0, 8),
+        demo: isDemoScope(auth.record),
       };
       (ctx as ExecutionContext & { props?: McpProps }).props = props;
       return CarsDataMCP.serve("/mcp").fetch(request, env, ctx);
