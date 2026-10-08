@@ -56,9 +56,14 @@ export async function encodeTree(secret: string | undefined, node: unknown): Pro
  *  Actor wrote into its dataset.
  *
  *  What makes the exception safe is where the risk actually was: the August
- *  extraction ran on FREE keys. The apify plan is metered and billed
+ *  extraction ran on free-tier keys — a tier retired on 2026-10-08 (D-01),
+ *  which narrows the exposure further. The apify plan is metered and billed
  *  per-result by Apify, so pulling the catalogue through it costs the puller
  *  money per row — the business model is the defence there, not obscurity.
+ *
+ *  Note the inverse still holds and still matters: every NON-apify plan gets
+ *  tokens, legacy `free` included, so the one live free key sees exactly the
+ *  id shape it has always seen.
  *
  *  Remove this once the Actor's input schema takes a string. Until then an id
  *  is opaque per PLAN, which is worth knowing when reading two responses side

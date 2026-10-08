@@ -1,8 +1,35 @@
-export type Plan = "free" | "demo" | "apify";
+// The plans the API OFFERS. D-01 (owner, 2026-10-08): only DEMO and paid
+// exist — `free` is retired and is deliberately not a member here, so no new
+// code path can name it without reaching for LegacyPlan on purpose.
+export type Plan = "demo" | "apify";
+
+// `free` is RETIRED, not erased — and the difference is a person.
+//
+// Every path that brings a plan into being now refuses it: /v1/admin/grant
+// 400s on it, scripts/keys-admin.mjs will not send it, and generateApiKey has
+// no default prefix left to fall back to. Nothing can mint a free key again.
+//
+// What `free` still has to do is be READ. Production inventory, measured
+// 2026-10-08: 185 keys, 182 of them inert free keys now revoked, and exactly
+// one APPROVED free key still in use — D-01 §4, a named integrator mid-test
+// whom the owner is answering personally. Deleting the string from this file
+// would not delete his KV record. It would make the quota lookup below return
+// undefined and throw on destructuring, i.e. turn every one of his requests
+// into a 500 — a silent outage for the one caller we deliberately kept.
+export type LegacyPlan = "free";
+
+/** What a stored KeyRecord's `plan` may say. Wider than `Plan` on purpose:
+ *  what we will ISSUE and what we must still SERVE are different sets. */
+export type StoredPlan = Plan | LegacyPlan;
+
+const LEGACY_PLANS: ReadonlySet<string> = new Set<LegacyPlan>(["free"]);
+
+/** True for a plan that exists only on already-issued keys. */
+export const isLegacyPlan = (plan: string): plan is LegacyPlan => LEGACY_PLANS.has(plan);
 
 // Apify usage is metered/billed through Apify's own pay-per-event platform
-// (BIZ-L2b §2), not our Free-tier quota — this cap exists only as a backstop
-// against a bug/runaway loop, not as the real limit on legitimate usage.
+// (BIZ-L2b §2) — this cap exists only as a backstop against a bug/runaway
+// loop, not as the real limit on legitimate usage.
 //
 // `daily` added 2026-10-03 (T79). The monthly cap alone says how MUCH a key
 // may take, never how FAST. On 30–31 August, 139 keys minted on temp-mail
@@ -12,11 +39,6 @@ export type Plan = "free" | "demo" | "apify";
 // a key take a week to drain its month, which is the difference between an
 // abusive key being noticed and an abusive key being finished.
 //
-// 200/day for free = a fifth of the month in one day. Chosen to leave an
-// integration test or a day of real development completely untouched: measured
-// legitimate traffic is ~225 calls/day ACROSS THE WHOLE API, and the busiest
-// legitimate day on record is 1.245 REST calls spread over all keys.
-//
 // `demo` added 2026-10-04 (T111). Its real limit is not here: a demo key can
 // only ever resolve the 40 variants in lib/demo-set.ts, served pre-rendered
 // from KV, so no number in this table protects the catalogue — the allowlist
@@ -24,9 +46,30 @@ export type Plan = "free" | "demo" | "apify";
 // tidiness, so it keeps a minute limit and generous day/month ceilings that a
 // real evaluation will never notice.
 const QUOTAS: Record<Plan, { monthly: number; daily: number; perMinute: number }> = {
-  free: { monthly: 1000, daily: 200, perMinute: 20 },
   demo: { monthly: 20_000, daily: 2_000, perMinute: 10 },
   apify: { monthly: 100_000, daily: 10_000, perMinute: 120 },
+};
+
+// Not an offer — a floor under keys that already exist. The numbers are
+// copied unchanged from the free row as it stood at e8f0330, because the whole
+// point is that the one live holder sees no change: 200/day was a fifth of the
+// month in one day, chosen to leave an integration test or a full day of real
+// development untouched (measured legitimate traffic is ~225 calls/day ACROSS
+// THE WHOLE API, and the busiest legitimate day on record is 1.245 REST calls
+// spread over all keys).
+//
+// WHEN THIS GOES: when no usable key is left on the plan. `node
+// scripts/keys-admin.mjs keys` is the check — once it prints no ACTIVE row
+// whose plan is `free`, delete LegacyPlan, this table, the LEGACY_PLANS set,
+// the isLegacyPlan branch in lib/apikey.ts isUsable, and collapse StoredPlan
+// back into Plan. Nothing else depends on it.
+const LEGACY_QUOTAS: Record<LegacyPlan, { monthly: number; daily: number; perMinute: number }> = {
+  free: { monthly: 1000, daily: 200, perMinute: 20 },
+};
+
+const ALL_QUOTAS: Record<StoredPlan, { monthly: number; daily: number; perMinute: number }> = {
+  ...QUOTAS,
+  ...LEGACY_QUOTAS,
 };
 
 // The service-wide ceiling on catalogue reads (T111 M1) — the ONLY layer that a
@@ -37,16 +80,25 @@ const QUOTAS: Record<Plan, { monthly: number; daily: number; perMinute: number }
 //
 // 5.000/day = 4,0x the busiest LEGITIMATE day on record (1.245 REST calls
 // across every key, 2026-09-16) and 7,5% of 31 August (66.774). At this rate
-// the full catalogue costs 21 days of monopolising the entire free tier, and
-// the monopolising is itself the alarm.
+// the full catalogue costs 21 days of monopolising the entire unlicensed
+// budget, and the monopolising is itself the alarm.
 //
 // Exempt, deliberately:
 //   * `demo` — scoped to 40 variants and served from KV, so it cannot spend
 //     catalogue exposure. Counting it would let discovery probes exhaust the
 //     budget that protects the catalogue, which is backwards.
 //   * `apify` — metered and billed by Apify's own platform (BIZ-L2b §2).
+//
+// Which leaves the legacy `free` plan as the ONLY counted one — and T166 kept
+// it that way on purpose, against the first reading of "remove free from
+// GLOBAL_COUNTED_PLANS". Both offered plans are exempt, so emptying this set
+// would not narrow the ceiling, it would switch it OFF: a live counter with no
+// subjects is dead code. And the subject it would lose is precisely the one
+// credential left with unbilled full-catalogue reach, which is what T111 M1
+// was built for. Counting it is also simply what production does today, and
+// "the live key keeps working" means unchanged, not more generous.
 export const GLOBAL_DAILY_CATALOGUE_READS = 5_000;
-const GLOBAL_COUNTED_PLANS: ReadonlySet<Plan> = new Set<Plan>(["free"]);
+const GLOBAL_COUNTED_PLANS: ReadonlySet<string> = new Set<StoredPlan>(["free"]);
 
 function monthBucket(d = new Date()): string {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -93,8 +145,18 @@ export type QuotaResult =
 // counting (one Durable Object per key — $0 at this volume), and until then the
 // layer that actually bounds exposure is the service-wide ceiling below plus
 // the demo allowlist, neither of which depends on counting being right.
-export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: Plan): Promise<QuotaResult> {
-  const { monthly, daily, perMinute } = QUOTAS[plan];
+export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: StoredPlan): Promise<QuotaResult> {
+  // `plan` arrives from JSON.parse of a KV record, so the type is a promise,
+  // not a guarantee. Before T166 an unrecognised value destructured undefined
+  // and threw a 500; now it refuses, by the same rule as the put below — if
+  // we cannot count it, we do not serve it. This is what makes removing a plan
+  // name from the offered set a safe operation rather than an outage.
+  const limits = ALL_QUOTAS[plan];
+  if (!limits) {
+    console.error("unknown plan on a stored key — refusing:", plan);
+    return { ok: false, reason: "metering", used: 0, quota: 0 };
+  }
+  const { monthly, daily, perMinute } = limits;
   const monthlyKey = `usage:${keyHash}:${monthBucket()}`;
   const dailyKey = `daily:${keyHash}:${dayBucket()}`;
   const minuteKey = `rl:${keyHash}:${minuteBucket()}`;
@@ -168,13 +230,18 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: Pl
   return { ok: true, used: monthlyUsed + 1, quota: monthly };
 }
 
-export async function currentUsage(kv: KVNamespace, keyHash: string, plan: Plan): Promise<{ used: number; quota: number }> {
+export async function currentUsage(kv: KVNamespace, keyHash: string, plan: StoredPlan): Promise<{ used: number; quota: number }> {
   const raw = await kv.get(`usage:${keyHash}:${monthBucket()}`);
-  return { used: Number(raw ?? 0), quota: QUOTAS[plan].monthly };
+  return { used: Number(raw ?? 0), quota: ALL_QUOTAS[plan]?.monthly ?? 0 };
 }
 
-/** Exposed for the tests and for /v1/usage, so the published caps have one source. */
+/** The OFFERED caps — what may be published, quoted on the site, or granted.
+ *  Exposed for the tests and for /v1/usage, so they have one source. */
 export const PLAN_QUOTAS = QUOTAS;
+
+/** Every cap a stored key can be metered against, offered or legacy. Use this
+ *  only where an already-issued key is being served; never to advertise. */
+export const ALL_PLAN_QUOTAS = ALL_QUOTAS;
 
 // ── anonymous demo MCP (T111 D9) ─────────────────────────────────────────────
 //

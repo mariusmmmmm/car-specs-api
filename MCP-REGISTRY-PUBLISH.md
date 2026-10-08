@@ -98,5 +98,8 @@ curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=cars-data" |
 ## Keeping metadata in sync
 - Coverage numbers in `server.json`/`README.md` mirror the site
   (`cars-data.com/llms.txt`: 102,191 variants / 116 brands / 19 languages).
-- The Free-tier rate limit shown here and on the promo page must match
-  `src/lib/quota.ts` (`free.perMinute`). Currently **20/min**.
+- The rate limits shown here and on the promo page must match
+  `src/lib/quota.ts`: **20/min** for the anonymous no-key MCP demo
+  (`ANON_DEMO_PER_MINUTE`) and **10/min** for an issued demo key
+  (`PLAN_QUOTAS.demo.perMinute`). There is no free tier to quote any more
+  (D-01, 2026-10-08).

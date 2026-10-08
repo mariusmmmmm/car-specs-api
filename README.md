@@ -20,7 +20,7 @@ Connect directly from Claude, ChatGPT connectors, Cursor, or Windsurf:
     "cars-data": {
       "type": "http",
       "url": "https://api.cars-data.com/mcp",
-      "headers": { "Authorization": "Bearer cd_free_..." }
+      "headers": { "Authorization": "Bearer cd_demo_..." }
     }
   }
 }
@@ -45,7 +45,7 @@ Base URL: `https://api.cars-data.com/v1`. Full reference in [`openapi.yaml`](./o
 
 ```bash
 curl https://api.cars-data.com/v1/variants/42164/specs?locale=de \
-  -H "X-Api-Key: cd_free_..."
+  -H "X-Api-Key: cd_demo_..."
 ```
 
 | Endpoint | Description |
@@ -62,10 +62,10 @@ curl https://api.cars-data.com/v1/variants/42164/specs?locale=de \
 | `GET /specs/catalog` | The full spec-type catalog (categories + counts) |
 | `GET /usage` | Self-check current quota usage for your key |
 
-### Request a free API key
+### Request a demo API key
 
-No key is reviewed. Send a request; click the link in the email and the key is
-emailed to you.
+The demo is the only self-serve key, and it is not reviewed. Send a request;
+click the link in the email and the key is emailed to you.
 
 ```bash
 curl -X POST https://api.cars-data.com/v1/keys \
@@ -78,7 +78,7 @@ attribution required. Bulk data is licensed separately: https://cars-data.com/en
 
 ### Key administration (owner)
 
-`node scripts/keys-admin.mjs requests | approve <id> | reject <id> | keys | approve-key <prefix> | revoke-key <prefix>`
+`node scripts/keys-admin.mjs keys | grant <email> <demo|apify> | approve-key <prefix> | revoke-key <prefix>`
 — needs the `ADMIN_TOKEN` Worker secret (also in `../.secrets/api-admin.env`).
 Worker secrets for the flow: `ADMIN_TOKEN`, `BREVO_API_KEY`, `NOTIFY_TO`, `NOTIFY_FROM`.
 
@@ -88,7 +88,7 @@ Worker secrets for the flow: `ADMIN_TOKEN`, `BREVO_API_KEY`, `NOTIFY_TO`, `NOTIF
 - **Apify** — pay-per-event, billed through the [Apify Store listing](https://apify.com/carsdatacom/car-specs-api), no API key needed.
 - **x402** — per-call USDC payment on Base for agents that want to pay without an account (not yet live — see the project roadmap).
 
-There is no subscription/Stripe tier — Free and Apify (and, later, x402) are the only paid paths.
+There is no subscription/Stripe tier, and no free tier: Apify (and, later, x402) is the paid path, and the demo is the only thing issued without one.
 
 ## Data & attribution
 

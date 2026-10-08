@@ -98,7 +98,7 @@ export class CarsDataMCP extends McpAgent<Env> {
           `${CATALOGUE.locales} languages. Returns candidate variant_ids to pass to ` +
           "get_specs/get_images/compare_variants. Each result carries generation_id and production years so " +
           "same-named variants from different generations can be told apart. " +
-          "Without an API key this answers from a fixed 40-car demo set, which is also what a free key covers; the full catalogue is a licensed export.",
+          "Without an API key this answers from a fixed 40-car demo set, which is also what a demo key covers; the full catalogue is a licensed export.",
         inputSchema: {
           query: z.string().describe("e.g. 'bmw 3 series' or 'tesla model s'"),
           locale: localeSchema,

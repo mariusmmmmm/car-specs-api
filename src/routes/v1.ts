@@ -37,7 +37,7 @@ v1.route("/keys", keys);
 // Owner-only, behind ADMIN_TOKEN (404 without it) — not part of the public API.
 v1.route("/admin", admin);
 
-// Everything else needs a Free (or later, paid) API key + counts against quota.
+// Everything else needs a demo or paid API key + counts against quota.
 const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 protectedV1.use("*", requireApiKey);
 

@@ -5,7 +5,8 @@ import { generateApiKey, isUsable, sha256Hex, type KeyRecord } from "../lib/apik
 import { TOS_VERSION } from "../lib/key-request";
 import { sendEmail } from "../lib/notify";
 
-// Owner-only key administration (T73). Every Free key is approved by hand;
+// Owner-only key administration (T73). A key on a plan the public cannot
+// self-serve is granted by hand;
 // scripts/keys-admin.mjs is the client. Guarded by the ADMIN_TOKEN secret —
 // with no secret set the whole surface answers 404, so a fresh deploy can't
 // expose it by accident.
@@ -60,23 +61,39 @@ async function listValues<T>(kv: KVNamespace, prefix: string): Promise<{ name: s
 // already in the inbox.
 
 // ── grant: the only way a non-demo key comes into being ─────────────────────
+// `plan` is REQUIRED since T166. It used to default to `free`, so the retired
+// tier was what an owner got by not finishing the command — the one shape of
+// mistake this endpoint must not make. GRANTABLE is the offered set and
+// nothing else: `free` is refused here BY NAME, with its own message, because
+// a bare "unknown plan" would read like a typo to whoever just typed it.
+const GRANTABLE = ["demo", "apify"] as const;
+type Grantable = (typeof GRANTABLE)[number];
+
 admin.post("/grant", async (c) => {
   const email = (c.req.query("email") ?? "").trim().toLowerCase();
-  const plan = (c.req.query("plan") ?? "free") as KeyRecord["plan"];
+  const plan = (c.req.query("plan") ?? "").trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
     const { body, status, headers } = problem(400, "Bad Request", "`email` is required.");
     return c.json(body, status, headers);
   }
-  if (plan !== "free" && plan !== "apify" && plan !== "demo") {
-    const { body, status, headers } = problem(400, "Bad Request", "`plan` must be free, demo or apify.");
+  if (plan === "free") {
+    const { body, status, headers } = problem(
+      400,
+      "Bad Request",
+      "The `free` plan was retired on 2026-10-08 and can no longer be granted. Use `demo` for an evaluation key, or `apify` for the paid channel.",
+    );
+    return c.json(body, status, headers);
+  }
+  if (!(GRANTABLE as readonly string[]).includes(plan)) {
+    const { body, status, headers } = problem(400, "Bad Request", "`plan` is required and must be demo or apify.");
     return c.json(body, status, headers);
   }
 
-  const rawKey = generateApiKey(plan === "demo" ? "cd_demo" : "cd_free");
+  const rawKey = generateApiKey(plan === "demo" ? "cd_demo" : "cd_apify");
   const keyHash = await sha256Hex(rawKey);
   const record: KeyRecord = {
     email,
-    plan,
+    plan: plan as Grantable,
     tos_version: TOS_VERSION,
     tos_accepted_at: now(),
     created_at: now(),

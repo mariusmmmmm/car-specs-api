@@ -236,30 +236,61 @@ describe("admin grant — the only path to a non-demo key", () => {
     expect((await adminCall("/grant?email=x@carscope.de", "POST", "wrong")).status).toBe(404);
   });
 
+  // Was written against plan=free, the then-default. T166 retired that plan
+  // (D-01), so the same guarantee — grant mints a WORKING key on the plan you
+  // name, and tells only the holder — is now asserted on the paid plan.
   it("mints a working key on the chosen plan and emails the holder only", async () => {
-    const res = await adminCall("/grant?email=mirsad@softcrafter.net&plan=free", "POST");
+    const res = await adminCall("/grant?email=mirsad@softcrafter.net&plan=apify", "POST");
     expect(res.status).toBe(200);
     const { data } = await res.json() as { data: { key_hash_prefix: string; emailed: boolean; plan: string } };
-    expect(data.plan).toBe("free");
+    expect(data.plan).toBe("apify");
     expect(data.emailed).toBe(true);
 
     const toUser = sent.find((m) => m.to === "mirsad@softcrafter.net")!;
-    const key = /cd_free_[0-9a-f]{48}/.exec(toUser.text)![0];
+    const key = /cd_apify_[0-9a-f]{48}/.exec(toUser.text)![0];
     expect(sent.some((m) => m.to === "owner@example.com")).toBe(false);
 
     // and it authenticates, on the full catalogue
     const auth = await authenticate(env, key);
     expect(auth.ok).toBe(true);
-    if (auth.ok) expect(auth.record.plan).toBe("free");
+    if (auth.ok) expect(auth.record.plan).toBe("apify");
+  });
+
+  it("still mints a demo key when asked for one", async () => {
+    const res = await adminCall("/grant?email=demo@carscope.de&plan=demo", "POST");
+    expect(res.status).toBe(200);
+    const { data } = await res.json() as { data: { plan: string } };
+    expect(data.plan).toBe("demo");
+    expect(/cd_demo_[0-9a-f]{48}/.test(sent.find((m) => m.to === "demo@carscope.de")!.text)).toBe(true);
+  });
+
+  // T166 / D-01: `free` is not a plan any more, and `grant` was the last place
+  // that could still mint one — it was even the DEFAULT, so an owner who
+  // stopped typing one word early got the retired tier.
+  it("refuses the retired free plan, by name and with a reason", async () => {
+    const res = await adminCall("/grant?email=x@carscope.de&plan=free", "POST");
+    expect(res.status).toBe(400);
+    expect((await res.json() as { detail: string }).detail).toMatch(/free.*retired/i);
+    expect([...store.keys()].some((k) => k.startsWith("key:"))).toBe(false);
+    expect(sent.length).toBe(0);
+  });
+
+  it("refuses an omitted plan instead of defaulting to one", async () => {
+    expect((await adminCall("/grant?email=x@carscope.de", "POST")).status).toBe(400);
+    expect([...store.keys()].some((k) => k.startsWith("key:"))).toBe(false);
   });
 
   it("refuses a plan it does not know, rather than inventing one", async () => {
     expect((await adminCall("/grant?email=x@carscope.de&plan=enterprise", "POST")).status).toBe(400);
-    expect((await adminCall("/grant?email=not-an-email", "POST")).status).toBe(400);
+    expect((await adminCall("/grant?email=not-an-email&plan=demo", "POST")).status).toBe(400);
   });
 });
 
 describe("authenticate", () => {
+  // The default plan here is the RETIRED `free` (T166 / D-01) and stays that
+  // way deliberately: these cases exist to describe keys that already exist in
+  // production, not keys we would issue. One approved free key is still live
+  // and must keep authenticating until the owner says otherwise.
   const put = async (raw: string, r: Partial<KeyRecord>) =>
     store.set(`key:${await sha256Hex(raw)}`, JSON.stringify({ email: "x@y.z", plan: "free", tos_version: "v", tos_accepted_at: "", created_at: "", email_verified: false, ...r }));
 
@@ -273,6 +304,22 @@ describe("authenticate", () => {
     expect((await authenticate(env, "cd_free_ok")).ok).toBe(true);
     await put("cd_free_rev", { approved: true, revoked_at: "2026-10-02" });
     expect(await authenticate(env, "cd_free_rev")).toMatchObject({ ok: false, status: 403 });
+  });
+
+  // The T166 acceptance test. Retiring a plan from the type and the quota
+  // table, without leaving a legacy path, does not make its KV records go
+  // away — it makes the quota lookup undefined and 500s a live integrator on
+  // every call. Full path: record → isUsable → checkAndConsume → served.
+  it("serves the one still-live free key end to end, on its original quota", async () => {
+    await put("cd_free_live", { approved: true, approved_at: "2026-10-04" });
+    const auth = await authenticate(env, "cd_free_live");
+    expect(auth.ok).toBe(true);
+    if (auth.ok) {
+      expect(auth.record.plan).toBe("free");
+      // metered, not waved through: the counters really were written
+      expect([...store.keys()].some((k) => k.startsWith("usage:"))).toBe(true);
+      expect([...store.keys()].some((k) => k.startsWith("global:"))).toBe(true);
+    }
   });
 
   it("leaves Apify keys working without approval", async () => {

@@ -102,8 +102,9 @@ describe("the apify plan keeps RAW ids — a live paid product must not break", 
   // The Actor declares variantId as "type": "integer" in its Apify input
   // schema and interpolates the user's value straight into the URL. Tokens
   // break it both ways: it cannot accept v_a7afb0ae, and a user cannot feed
-  // back an id it wrote into a dataset. The free tier — which is where the
-  // August extraction ran — still gets tokens.
+  // back an id it wrote into a dataset. Everything that is NOT apify still
+  // gets tokens — including the retired `free` plan (T166 / D-01), which is
+  // where the August extraction ran and where one live key remains.
   function appWithPlan(plan: string, body: unknown) {
     const a = new Hono<{ Bindings: typeof env; Variables: { apiKeyRecord: { plan: string } } }>();
     a.use("*", async (c, next) => { c.set("apiKeyRecord", { plan } as never); await next(); });
@@ -120,7 +121,9 @@ describe("the apify plan keeps RAW ids — a live paid product must not break", 
     expect(text).toContain('"next":"42164"');
   });
 
-  test("a free response on the very same body gets tokens", async () => {
+  // Retiring the plan must not quietly promote its holder to raw ids: the
+  // exception is keyed on `apify` alone, and this is what pins it there.
+  test("a legacy free response on the very same body still gets tokens", async () => {
     const res = await appWithPlan("free", envelope([{ variant_id: 42164 }], { last_synced_at: "n" }, { next: "42164" }))
       .fetch(new Request("http://x/"), env);
     const text = await res.text();
