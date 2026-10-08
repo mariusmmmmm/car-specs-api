@@ -79,9 +79,9 @@ catalog.get("/brands/:slug/models", async (c) => {
   const slug = c.req.param("slug");
   const { limit, offset } = await parsePaging(c);
   const rows = await sql<
-    { id: number; brand_id: number; slug: string; name: string; last_synced_at: Date | null }[]
+    { model_id: number; brand_id: number; slug: string; name: string; last_synced_at: Date | null }[]
   >`
-    SELECT m.public_id::int AS id, b.public_id::int AS brand_id,
+    SELECT m.public_id::int AS model_id, b.public_id::int AS brand_id,
            COALESCE(mt.slug, m.canonical_slug) AS slug,
            COALESCE(mt.display_name, m.display_name) AS name,
            m.last_synced_at
@@ -101,7 +101,13 @@ catalog.get("/brands/:slug/models", async (c) => {
   }
   return c.json(
     envelope(
-      rows.map((r) => ({ id: r.id, brand_id: r.brand_id, slug: r.slug, name: r.name })),
+      // `model_id`, not `id` (T157). The single gate in middleware/opaque-ids.ts
+      // tokenises by FIELD NAME — its table is variant_id/generation_id/model_id —
+      // so a model published as `id` left this list handing out the raw public_id
+      // while its own successor route, /models/:id/generations, decodes strictly
+      // an `m_…` token. The chain brand -> model -> generation was therefore
+      // unreachable for every client, and the id space leaked. One name fixes both.
+      rows.map((r) => ({ model_id: r.model_id, brand_id: r.brand_id, slug: r.slug, name: r.name })),
       { locale, last_synced_at: maxSyncedAt(rows) },
       nextLink(rows.length, limit, offset),
     ),
@@ -130,7 +136,8 @@ catalog.get("/models/:id/generations", async (c) => {
   return c.json(
     envelope(
       rows.map((r) => ({
-        id: r.id,
+        // `generation_id`, not `id` — same reason as the models list above (T157).
+        generation_id: r.generation_id,
         model_id: r.model_id,
         slug: r.slug,
         name: r.name,

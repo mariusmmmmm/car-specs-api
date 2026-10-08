@@ -943,15 +943,30 @@ components:
     Model:
       type: object
       properties:
-        id: { type: string, example: "m_1a2b3c4d" }
-        brand_id: { type: integer }
+        model_id:
+          type: string
+          example: "m_1a2b3c4d"
+          description: >-
+            Opaque model token. Pass it straight to /models/{id}/generations.
+            Until T157 this field was called `id` and carried the raw internal
+            public_id as an integer — which no route would accept back, so the
+            drill-down was unreachable. The field was renamed, not re-typed:
+            `id` is gone from this object.
+        brand_id:
+          type: integer
+          description: Brand public id. Brands are not tokenised — see Brand.id.
         slug: { type: string }
         name: { type: string }
 
     Generation:
       type: object
       properties:
-        id: { type: string, example: "g_1a2b3c4d" }
+        generation_id:
+          type: string
+          example: "g_1a2b3c4d"
+          description: >-
+            Opaque generation token. Pass it to /generations/{id}/variants.
+            Renamed from `id` in T157, for the same reason as Model.model_id.
         model_id: { type: string, example: "m_1a2b3c4d" }
         slug: { type: string }
         name: { type: string }
