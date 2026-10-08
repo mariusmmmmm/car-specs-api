@@ -8,7 +8,9 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "openapi:build": "node scripts/build-openapi-json.mjs",
+    "openapi:check": "node scripts/build-openapi-json.mjs --check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
