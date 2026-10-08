@@ -1,0 +1,1960 @@
+{
+  "components": {
+    "parameters": {
+      "BrandSlug": {
+        "description": "Canonical brand slug, e.g. `volkswagen`. Slugs are stable and public; only numeric ids are tokenised.",
+        "in": "path",
+        "name": "slug",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Cursor": {
+        "description": "Opaque pagination token — hand back the `links.next` value from the\nprevious page. Omit it for the first page. A token that cannot be read\nrestarts from the first page rather than failing, so a client holding a\nstale cursor pages again instead of breaking.\n",
+        "in": "query",
+        "name": "cursor",
+        "schema": {
+          "example": "c_0a1b2c3d",
+          "type": "string"
+        }
+      },
+      "GenerationId": {
+        "description": "Opaque generation token, `g_` followed by 8 hex characters.",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "example": "g_1a2b3c4d",
+          "pattern": "^g_[0-9a-f]{8}$",
+          "type": "string"
+        }
+      },
+      "Limit": {
+        "description": "Page size, 1–50. Values above 50 are clamped to 50.",
+        "in": "query",
+        "name": "limit",
+        "schema": {
+          "default": 50,
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "Locale": {
+        "description": "One of the 20 published languages. Anything else — including a language\nthe site does not publish — falls back to `en` silently.\n",
+        "in": "query",
+        "name": "locale",
+        "schema": {
+          "default": "en",
+          "enum": [
+            "ar",
+            "bg",
+            "cs",
+            "da",
+            "de",
+            "el",
+            "en",
+            "es",
+            "fr",
+            "hr",
+            "hu",
+            "it",
+            "no",
+            "pl",
+            "pt",
+            "ro",
+            "sk",
+            "sr",
+            "sv",
+            "tr"
+          ],
+          "type": "string"
+        }
+      },
+      "ModelId": {
+        "description": "Opaque model token, `m_` followed by 8 hex characters.",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "example": "m_1a2b3c4d",
+          "pattern": "^m_[0-9a-f]{8}$",
+          "type": "string"
+        }
+      },
+      "VariantId": {
+        "description": "Opaque variant token, `v_` followed by 8 hex characters.",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "example": "v_1a2b3c4d",
+          "pattern": "^v_[0-9a-f]{8}$",
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "Forbidden": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description": "The key is revoked or not yet active, or — on a demo key — the path is\noutside the demo tier. The detail says which, and carries the upgrade\npath.\n"
+      },
+      "NotFound": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description": "Not found. A token that does not decode gets this too."
+      },
+      "Problem": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description": "RFC 9457 problem document."
+      },
+      "TooManyRequests": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description": "A limit on **your** key: per-minute, per-day or per-month. The detail\nnames which. Distinct from `503`, which is a failure on our side.\n"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description": "No key, or a key we do not know. `WWW-Authenticate: Bearer` on the MCP\nsurface. The MCP server needs no key at all; a REST demo key is one\nclick away.\n"
+      },
+      "Unavailable": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description": "**Ours, not yours.** Request metering is unavailable and the request is\nrefused rather than served uncounted — the API fails closed. Comes with\n`Retry-After`. A client must not treat this as a signal to throttle\nitself.\n"
+      }
+    },
+    "schemas": {
+      "Brand": {
+        "properties": {
+          "id": {
+            "description": "Brand public id. Brands are not tokenised — they are already public on the site and in the sitemaps.",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Localized display name.",
+            "type": "string"
+          },
+          "sameAs": {
+            "description": "Wikidata link when known; an empty array otherwise.",
+            "items": {
+              "format": "uri",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BrandEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Brand"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "BrandListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Brand"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "CompareEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/VariantSpecs"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "DemoKeyRequest": {
+        "description": "Every field is required.",
+        "properties": {
+          "accept_tos": {
+            "const": true,
+            "description": "Must be exactly `true`. See https://cars-data.com/en/api/terms",
+            "type": "boolean"
+          },
+          "company": {
+            "description": "The organisation the key is for — your own name if you are independent.",
+            "maxLength": 120,
+            "minLength": 2,
+            "type": "string"
+          },
+          "email": {
+            "description": "Where the activation link goes. Disposable domains and domains without an MX record are refused.",
+            "format": "email",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 2,
+            "type": "string"
+          },
+          "role": {
+            "description": "Your role there, e.g. developer, CTO, founder.",
+            "maxLength": 80,
+            "minLength": 2,
+            "type": "string"
+          },
+          "use_case": {
+            "description": "What you intend to build. At least 20 characters.",
+            "maxLength": 2000,
+            "minLength": 20,
+            "type": "string"
+          },
+          "website": {
+            "description": "The site or app the data will be used in, e.g. `https://example.com`.",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "company",
+          "website",
+          "role",
+          "use_case",
+          "accept_tos"
+        ],
+        "type": "object"
+      },
+      "DemoSet": {
+        "properties": {
+          "fuels": {
+            "description": "Every fuel type represented in the set.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "set": {
+            "description": "The brands and models in the set",
+            "in words.": null,
+            "type": "string"
+          },
+          "upgrade": {
+            "description": "What to do when 40 cars are not enough.",
+            "type": "string"
+          },
+          "variant_count": {
+            "const": 40,
+            "type": "integer"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/DemoVariant"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "DemoSetEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DemoSet"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "DemoVariant": {
+        "description": "A demo row. Same opaque tokens as the catalogue, same field names, fewer fields.",
+        "properties": {
+          "battery_kwh": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "body_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "brand": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "fuel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "generation": {
+            "type": "string"
+          },
+          "generation_id": {
+            "example": "g_1a2b3c4d",
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "model_id": {
+            "example": "m_1a2b3c4d",
+            "type": "string"
+          },
+          "power_hp": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "price_new_eur": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "variant_id": {
+            "example": "v_1a2b3c4d",
+            "type": "string"
+          },
+          "years": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Generation": {
+        "properties": {
+          "id": {
+            "example": "g_1a2b3c4d",
+            "type": "string"
+          },
+          "model_id": {
+            "example": "m_1a2b3c4d",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "year_end": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "year_start": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "GenerationListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Generation"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "Health": {
+        "properties": {
+          "active_variants": {
+            "type": "integer"
+          },
+          "status": {
+            "example": "ok",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "HealthEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Health"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "ImageListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ImageRef"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "ImageRef": {
+        "properties": {
+          "url": {
+            "format": "uri",
+            "type": "string"
+          },
+          "variant": {
+            "enum": [
+              "card",
+              "hero"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IssuedKey": {
+        "description": "Returned once and never again — we store only a hash.",
+        "properties": {
+          "api_key": {
+            "example": "cd_demo_0123456789abcdef0123456789abcdef0123456789abcdef",
+            "type": "string"
+          },
+          "covers": {
+            "description": "The demo set, in words — e.g. \"40 cars — Volkswagen: Golf, Transporter · BMW: 3-serie, i3 · …\"",
+            "type": "string"
+          },
+          "full_catalogue": {
+            "format": "uri",
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "plan": {
+            "const": "demo",
+            "type": "string"
+          },
+          "start_here": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IssuedKeyEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/IssuedKey"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "Links": {
+        "properties": {
+          "next": {
+            "description": "Opaque cursor for the next page; absent when the page was not full.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Meta": {
+        "properties": {
+          "last_synced_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "units": {
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "last_synced_at"
+        ],
+        "type": "object"
+      },
+      "Model": {
+        "properties": {
+          "brand_id": {
+            "type": "integer"
+          },
+          "id": {
+            "example": "m_1a2b3c4d",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModelListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "PriceSnapshot": {
+        "description": "A single point-in-time snapshot, not a history series.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "type": "string"
+          },
+          "price_eur": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "variant_id": {
+            "example": "v_1a2b3c4d",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PriceSnapshotEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PriceSnapshot"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "ProblemDetail": {
+        "description": "RFC 9457 `application/problem+json`.",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "default": "about:blank",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status"
+        ],
+        "type": "object"
+      },
+      "SearchResult": {
+        "properties": {
+          "brand_slug": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "generation_id": {
+            "example": "g_1a2b3c4d",
+            "type": "string"
+          },
+          "model_slug": {
+            "type": "string"
+          },
+          "variant_id": {
+            "example": "v_1a2b3c4d",
+            "type": "string"
+          },
+          "year_from": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "year_to": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SearchResultEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "SpecDefinition": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "group": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spec_key": {
+            "type": "string"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SpecDefinitionListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SpecDefinition"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "SpecValue": {
+        "description": "One resolved spec value.",
+        "properties": {
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "u": {
+            "description": "Unit, e.g. \"kW\", \"km/h\".",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "v": {
+            "description": "The value — number, boolean, or a localized label."
+          }
+        },
+        "type": "object"
+      },
+      "Usage": {
+        "properties": {
+          "plan": {
+            "description": "`demo` — the self-serve tier, 40 cars.\n`apify` — the paid channel, metered and billed by Apify.\n`free` — **legacy and deprecated.** Nothing has issued one since\n2026-10-06 and the plan is being removed; it can still appear on a\nkey granted by hand before that date.\n",
+            "enum": [
+              "demo",
+              "apify",
+              "free"
+            ],
+            "type": "string"
+          },
+          "quota": {
+            "type": "integer"
+          },
+          "resets_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "used": {
+            "description": "Calls counted this month. Counting is best-effort and is known to under-count; it is not a billing record.",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UsageEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "Variant": {
+        "description": "The summary projection used by every list endpoint.",
+        "properties": {
+          "accel_0_100_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "battery_kwh": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "body_type_en": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "fuel_slug": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "generation_id": {
+            "example": "g_1a2b3c4d",
+            "type": "string"
+          },
+          "power_hp": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "price_new_eur": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "top_speed_kmh": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "torque_nm": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "variant_id": {
+            "example": "v_1a2b3c4d",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VariantDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Variant"
+          },
+          {
+            "properties": {
+              "spec_count": {
+                "description": "How many spec values this variant has. `0` for the handful with none.",
+                "type": "integer"
+              },
+              "specs": {
+                "additionalProperties": true,
+                "description": "The raw, language-neutral spec document. `{}` when the variant has no spec rows. Use `/variants/{id}/specs` for localized labels.",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "VariantDetailEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VariantDetail"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "VariantListEnvelope": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Variant"
+            },
+            "type": "array"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "VariantSpecs": {
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "specs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SpecValue"
+            },
+            "type": "object"
+          },
+          "variant_id": {
+            "example": "v_1a2b3c4d",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VariantSpecsEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VariantSpecs"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      },
+      "VerificationSent": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "const": "verification_sent",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VerificationSentEnvelope": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VerificationSent"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "description": "The usual way. `X-Api-Key: cd_demo_…`",
+        "in": "header",
+        "name": "X-Api-Key",
+        "type": "apiKey"
+      },
+      "BearerAuth": {
+        "description": "`Authorization: Bearer <key>` — accepted everywhere `X-Api-Key` is, and\nwhat most MCP clients send.\n",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "email": "office@cars-data.com",
+      "name": "cars-data.com",
+      "url": "https://cars-data.com/en/api"
+    },
+    "description": "Read-only, cacheable, versioned REST API over cars-data.com's multilingual\nvehicle catalogue (103,099 variants, 1,300+ models, 5,395 generations,\n224 spec types, 20 languages).\n\n# Two tiers, and only two\n\nThere is **no free tier**. Access to this API comes in exactly two shapes,\nand the difference between them is not a quota — it is which data exists\nbehind the key.\n\n## 1. Demo — self-serve, free, 40 cars\n\nFill in the request form (`POST /keys/demo`; every field is required),\nclick the link in the email, and the key is active. Nothing waits for a\nhuman.\n\nA demo key is scoped to a **frozen sample of 40 cars** — 5 brands x 2\nmodels x 2 generations x 2 variants, covering all 10 fuel types — with\n**every** spec, every image and all 20 languages. `GET /demo` hands over\nthe whole set in one call, so there is nothing to discover by probing.\n\n**The demo cannot reach the catalogue, structurally.** This is not a quota\nand not an allowlist consulted per route: a request carrying a demo key is\ndispatched, before any catalogue route runs, into a separate router\n(`src/routes/demo.ts`) that answers entirely from a pre-rendered blob in\nWorkers KV. That module and the set it serves (`src/lib/demo-set.ts`)\ncontain zero references to Hyperdrive or to Postgres — there is no code\npath from a demo request to a database connection. A leaked demo key\ntherefore cannot be used to walk the catalogue, because the catalogue is\nnot reachable from where that key is answered, no matter how many requests\nit makes. Anything outside the 40 cars answers `403`, never `404`: the\nroute exists, the tier does not reach it.\n\n## 2. Paid\n\nTwo products, both arranged by hand — there is no instant checkout:\n\n  * **The Apify Actor** — the API over the full catalogue, metered and\n    billed per result by Apify's own platform:\n    https://apify.com/carsdatacom/car-specs-api\n  * **A licensed data export** — the modules you need, as CSV and JSON\n    with a field dictionary and a per-field coverage sheet, with an\n    optional update subscription. Priced and ordered on\n    https://cars-data.com/en/api\n\n`GET /export` is **not** that export and never serves bulk data; it\nanswers `403` with a pointer to the licensing page.\n\n# Conventions\n\n  * Every success is `{ data, meta }`, plus `links` on paginated lists.\n    `meta.last_synced_at` is on every response.\n  * Every error is RFC 9457 `application/problem+json`.\n  * Identifiers are **opaque tokens**, not integers: `v_1a2b3c4d` for a\n    variant, `g_…` for a generation, `m_…` for a model, `c_…` for a\n    pagination cursor. They are domain-separated — a variant token is\n    refused where a model token is expected — and an unparseable token\n    gets the same `404` as a car that does not exist. Only the `apify`\n    plan receives raw integer ids, because the published Actor's input\n    schema declares `variantId` as an integer.\n  * Attribution is required; see the Terms of Service.\n",
+    "license": {
+      "name": "Proprietary — see Terms of Service",
+      "url": "https://cars-data.com/en/api/terms"
+    },
+    "summary": "Car specifications for AI agents and applications — generation-level, 20 languages, EV data.",
+    "termsOfService": "https://cars-data.com/en/api/terms",
+    "title": "cars-data.com API",
+    "version": "2.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/brands": {
+      "get": {
+        "description": "Ordered by popularity, then name. On a demo key this is answered from the blob and lists only the 5 brands in the demo set.",
+        "operationId": "listBrands",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "List brands",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/brands/{slug}": {
+      "get": {
+        "operationId": "getBrand",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrandSlug"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Outside the demo set (demo keys), or the key is not usable."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "One brand by slug",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/brands/{slug}/models": {
+      "get": {
+        "operationId": "listModelsOfBrand",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrandSlug"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Models of a brand",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/compare": {
+      "get": {
+        "description": "Ids are decoded strictly: one unreadable token fails the whole call\nwith `400`, rather than quietly comparing the cars that did parse.\n\nAvailable in the demo tier, for cars inside the 40.\n",
+        "operationId": "compareVariants",
+        "parameters": [
+          {
+            "description": "2–4 opaque variant tokens, comma-separated.",
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "example": "v_1a2b3c4d,v_5e6f7a8b",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Missing `ids`, fewer than 2 or more than 4, or one of them is not a valid variant token."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "On a demo key, at least one of the cars is outside the demo set."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Side-by-side specs for 2–4 variants",
+        "tags": [
+          "utilities"
+        ]
+      }
+    },
+    "/demo": {
+      "get": {
+        "description": "Every car a demo key can reach, in a single response — so evaluating\nthe demo never requires guessing which cars are in it.\n\nAnswered from a pre-rendered blob in Workers KV. **Demo keys only**: a\npaid key is routed to the catalogue and will get `404` here, because\nthis path exists only inside the demo router.\n",
+        "operationId": "getDemoSet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoSetEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem",
+            "description": "The demo dataset is being rebuilt. Nothing is wrong with your key — `Retry-After: 300`."
+          }
+        },
+        "summary": "The whole demo set in one call",
+        "tags": [
+          "demo"
+        ]
+      }
+    },
+    "/docs": {
+      "get": {
+        "description": "Public HTML page that renders `/v1/openapi.json`. The renderer is loaded from a CDN rather than bundled — the Worker ships on every deploy and has no reason to carry a documentation UI.",
+        "operationId": "getDocsPage",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [],
+        "summary": "Rendered API reference",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/export": {
+      "get": {
+        "description": "This endpoint exists so that asking for bulk data gets a straight\nanswer instead of a `404`. It never returns data.\n\nExports are arranged by hand: pick the modules you need, in the\nlanguages you need, optionally with an update subscription. Prices,\nmodule list and coverage sheet are published on\nhttps://cars-data.com/en/api — the module prices start at €190 and the\ncatalogue module (€490) is always included. Orders are invoiced; there\nis no instant checkout.\n\nIf what you want is the API over the full catalogue rather than a file,\nthat is the Apify Actor: https://apify.com/carsdatacom/car-specs-api\n",
+        "operationId": "getExport",
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Always. The detail carries the licensing link."
+          }
+        },
+        "summary": "Always 403 — bulk data is licensed, not served",
+        "tags": [
+          "licensing"
+        ]
+      }
+    },
+    "/generations/{id}/variants": {
+      "get": {
+        "operationId": "listVariantsOfGeneration",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GenerationId"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Variants of a generation",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Public — no API key. Touches the database, so a `200` means the catalogue is actually reachable, not just that the Worker is up.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [],
+        "summary": "Liveness plus the number of active variants",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/keys": {
+      "post": {
+        "description": "Identical behaviour to `POST /keys/demo`, same request body, same\nresponses. It exists so a cached page or a copied `curl` line posting\nhere keeps working.\n\n**It does not issue a reviewed key.** Until 2026-10-06 this endpoint\nrecorded a request that a human approved by hand, and the key it\neventually produced reached the whole catalogue. That tier is gone:\nnothing self-serve reaches the catalogue any more, so there is nothing\nleft to review.\n",
+        "operationId": "requestDemoKeyAlias",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationSentEnvelope"
+                }
+              }
+            },
+            "description": "Recorded; an activation link has been emailed."
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem",
+            "description": "A required field is missing or malformed."
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem",
+            "description": "A key was already issued to this address."
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem",
+            "description": "The email domain is disposable or unreachable."
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem",
+            "description": "More than 5 key requests from this network today."
+          }
+        },
+        "security": [],
+        "summary": "Alias of POST /keys/demo",
+        "tags": [
+          "keys"
+        ]
+      }
+    },
+    "/keys/demo": {
+      "post": {
+        "description": "Step 1 of 2. Records the request and emails a one-click activation\nlink. **No key exists yet** and nothing is pending review — the link is\nthe only gate, and it is yours to click.\n\nEvery field is required. They are not a review gate; they are the\nlead, and asking for them after issuing would mean nobody fills them\nin.\n\nLimits: 5 requests per IP per day, one key per email address. The\nemail domain is checked for an MX record, because a key emailed to a\ndomain that cannot receive mail helps nobody.\n",
+        "operationId": "requestDemoKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationSentEnvelope"
+                }
+              }
+            },
+            "description": "Recorded; an activation link has been emailed."
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem",
+            "description": "A required field is missing or malformed, or `accept_tos` is not `true`."
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem",
+            "description": "A key was already issued to this address. We keep only a hash of it and cannot resend it — write to office@cars-data.com."
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem",
+            "description": "The email domain is disposable, unreachable, or has no mail exchanger."
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem",
+            "description": "More than 5 key requests from this network today."
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem",
+            "description": "The request could not be recorded. Ours, not yours — retry shortly."
+          }
+        },
+        "security": [],
+        "summary": "Request a demo key (all fields required)",
+        "tags": [
+          "keys"
+        ]
+      }
+    },
+    "/keys/demo/verify": {
+      "get": {
+        "description": "Step 2 of 2, and the endpoint the emailed link points at. Mints the\nkey, returns it **once**, and emails a copy. We store only a hash and\ncannot show it again.\n\nThe token is burned before the key is minted, so a double click cannot\nproduce two keys. The link works once and expires after 3 days.\n",
+        "operationId": "verifyDemoKey",
+        "parameters": [
+          {
+            "description": "The 48-hex-character token from the activation link.",
+            "in": "query",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{48}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedKeyEnvelope"
+                }
+              }
+            },
+            "description": "The key, shown once."
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Not a well-formed verification link."
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Already used, or expired after 3 days. Request a new one."
+          }
+        },
+        "security": [],
+        "summary": "Activate the key from the emailed link",
+        "tags": [
+          "keys"
+        ]
+      }
+    },
+    "/models/{id}/generations": {
+      "get": {
+        "operationId": "listGenerationsOfModel",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ModelId"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem",
+            "description": "No such model — and the same answer for a token that does not decode, so a guess and a missing car are indistinguishable."
+          }
+        },
+        "summary": "Generations of a model",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "description": "Public and CORS-open (`Access-Control-Allow-Origin: *`). Documentation\nbehind an API key only opens for people who already got in.\n\nGenerated from `openapi.yaml`; a test fails the build if the two drift,\nand a second test fails if either drifts from the routes the Worker\nactually mounts.\n",
+        "operationId": "getOpenApiSpec",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "An OpenAPI 3.1 document.",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [],
+        "summary": "This document, as JSON",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/search": {
+      "get": {
+        "description": "Trigram matching on brand, model and display name. In the demo tier this is a substring match over the 40 rows, in the Worker — there is no catalogue behind it to walk.",
+        "operationId": "searchVariants",
+        "parameters": [
+          {
+            "description": "The search phrase.",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResultEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Missing `q`."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "summary": "Typeahead search over variant names",
+        "tags": [
+          "utilities"
+        ]
+      }
+    },
+    "/specs/catalog": {
+      "get": {
+        "description": "The 224 spec types, localized. Read this once to know what the keys in `/variants/{id}/specs` mean.",
+        "operationId": "listSpecDefinitions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecDefinitionListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Not part of the demo tier — a demo key gets `403` with the upgrade path."
+          }
+        },
+        "summary": "The spec dictionary — every spec key, its label, unit and group",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/usage": {
+      "get": {
+        "operationId": "getUsage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "Not part of the demo tier."
+          }
+        },
+        "summary": "This key's plan and month-to-date usage",
+        "tags": [
+          "utilities"
+        ]
+      }
+    },
+    "/variants": {
+      "get": {
+        "description": "Structured filtering. Paginated with a **keyset** cursor, not an\noffset: `links.next` carries an opaque `c_…` token to hand back as\n`?cursor=`. Page size is capped at 50.\n\nNot part of the demo tier.\n",
+        "operationId": "filterVariants",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "description": "Fuel slug, e.g. `benzine`, `elektrisch`.",
+            "in": "query",
+            "name": "fuel",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Body type, matched against the English body-type label.",
+            "in": "query",
+            "name": "body",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Drivetrain.",
+            "in": "query",
+            "name": "drive",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Minimum power, hp.",
+            "in": "query",
+            "name": "power_min",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum power, hp.",
+            "in": "query",
+            "name": "power_max",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum new list price, EUR.",
+            "in": "query",
+            "name": "price_max",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Production year covered by the generation.",
+            "in": "query",
+            "name": "year",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Pass `true` for battery-electric variants only. Any other value is ignored.",
+            "in": "query",
+            "name": "ev",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "summary": "Filter variants",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}": {
+      "get": {
+        "description": "Returns the summary fields plus `spec_count` and `specs` — the raw,\nlanguage-neutral spec document. For localized labels and units use\n`/variants/{id}/specs`.\n\nIn the demo tier the same path answers from the blob and returns the\nsummary fields only (no `specs`); a car outside the 40 gets `403`.\n",
+        "operationId": "getVariant",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantDetailEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "On a demo key, this car is outside the demo set."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "One variant, with its full language-neutral spec document",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}/images": {
+      "get": {
+        "description": "CDN URLs. Images **are** included in the demo — 40 cars' worth, which is what makes a demo convincing.",
+        "operationId": "getVariantImages",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageListEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "On a demo key, this car is outside the demo set."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Images for one variant",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}/prices": {
+      "get": {
+        "description": "A single point-in-time snapshot of the Dutch new-car list price, not a\nhistory series — read `as_of`. The full price history (~290k price\npoints by model year) is a licensed module, not an API surface.\n\nNot part of the demo tier.\n",
+        "operationId": "getVariantPrice",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceSnapshotEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem",
+            "description": "No such variant, or no price snapshot recorded for it."
+          }
+        },
+        "summary": "Latest new-car list price snapshot (NL)",
+        "tags": [
+          "variants"
+        ]
+      }
+    },
+    "/variants/{id}/specs": {
+      "get": {
+        "description": "Spec values and units resolved into the requested language. In the demo tier this is answered from the blob, for the 40 cars, in all 20 languages.",
+        "operationId": "getVariantSpecs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/VariantId"
+          },
+          {
+            "$ref": "#/components/parameters/Locale"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantSpecsEnvelope"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem",
+            "description": "On a demo key, this car is outside the demo set."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Localized specs for one variant",
+        "tags": [
+          "variants"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    },
+    {
+      "BearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Production (the only deployed environment — this API has no staging)",
+      "url": "https://api.cars-data.com/v1"
+    },
+    {
+      "description": "Local dev (wrangler dev, Hyperdrive localConnectionString -> cars_v3)",
+      "url": "http://localhost:8790/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Health and documentation — no key needed.",
+      "name": "service"
+    },
+    {
+      "description": "The self-serve demo key — request it, activate it from the email.",
+      "name": "keys"
+    },
+    {
+      "description": "What a demo key reaches. Answered from Workers KV; never from the database.",
+      "name": "demo"
+    },
+    {
+      "description": "Brands, models, generations — cheap, very long cache.",
+      "name": "catalog"
+    },
+    {
+      "description": "Variants and their specs, images and prices.",
+      "name": "variants"
+    },
+    {
+      "description": "Search, compare, usage self-check.",
+      "name": "utilities"
+    },
+    {
+      "description": "Bulk data — not served here; licensed separately.",
+      "name": "licensing"
+    }
+  ],
+  "x-generated-note": "openapi.json is generated from openapi.yaml by scripts/build-openapi-json.mjs — do not hand-edit the JSON."
+}

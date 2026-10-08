@@ -9,6 +9,7 @@ import { compare } from "./compare";
 import { keys } from "./keys";
 import { keysDemo } from "./keys-demo";
 import { admin } from "./admin";
+import { docs } from "./docs";
 import { usage } from "./usage";
 import { exportRoute } from "./export";
 import { requireApiKey } from "../middleware/auth";
@@ -37,7 +38,15 @@ v1.route("/keys", keys);
 // Owner-only, behind ADMIN_TOKEN (404 without it) — not part of the public API.
 v1.route("/admin", admin);
 
-// Everything else needs a Free (or later, paid) API key + counts against quota.
+// The reference and the spec, public. A door that opens only for people who
+// already came in is not documentation — and what a caller without a key most
+// needs the docs for is how to get one. Mounted before requireApiKey for that
+// reason; keep it there.
+v1.route("/", docs);
+
+// Everything below needs a key (demo or paid) and counts against quota. There
+// is no free tier: the only self-serve key is the demo above, scoped to 40
+// cars; everything else is the Apify Actor or a licensed export.
 const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 protectedV1.use("*", requireApiKey);
 

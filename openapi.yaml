@@ -1,48 +1,320 @@
+# SOURCE OF TRUTH. openapi.json is GENERATED from this file — never edit it by
+# hand: node scripts/build-openapi-json.mjs
+#
+# src/lib/openapi-sync.test.ts fails the build when this file and the JSON
+# disagree, AND when either disagrees with the routes src/routes/v1.ts and
+# src/routes/demo.ts actually mount. That second check is why T164 exists: the
+# first attempt at these docs (T29) drifted 17 commits behind the live Worker
+# and ended up documenting a key flow T111 had deleted.
 openapi: 3.1.0
+x-generated-note: "openapi.json is generated from openapi.yaml by scripts/build-openapi-json.mjs — do not hand-edit the JSON."
 info:
   title: cars-data.com API
-  version: "1.0.0"
-  summary: The car-specs API & MCP that AI agents call — generation-level, 20 languages, EV data.
+  version: "2.0.0"
+  summary: Car specifications for AI agents and applications — generation-level, 20 languages, EV data.
   description: |
-    Read-only, cacheable, versioned API over cars-data.com's multilingual vehicle
-    catalog (103,099 variants, 1,300+ models, 5,395 generations, 224 spec types,
-    20 languages). Backed by the `variant_doc` read-model (see
-    specs/plans/BIZ-L2a-openapi-readmodel.md).
+    Read-only, cacheable, versioned REST API over cars-data.com's multilingual
+    vehicle catalogue (103,099 variants, 1,300+ models, 5,395 generations,
+    224 spec types, 20 languages).
 
-    Phase 1 scope: per-lookup reads only, attribution required. Bulk
-    data is licensed separately as modular exports with optional updates —
-    see https://cars-data.com/en/api. See termsOfService.
+    # Two tiers, and only two
+
+    There is **no free tier**. Access to this API comes in exactly two shapes,
+    and the difference between them is not a quota — it is which data exists
+    behind the key.
+
+    ## 1. Demo — self-serve, free, 40 cars
+
+    Fill in the request form (`POST /keys/demo`; every field is required),
+    click the link in the email, and the key is active. Nothing waits for a
+    human.
+
+    A demo key is scoped to a **frozen sample of 40 cars** — 5 brands x 2
+    models x 2 generations x 2 variants, covering all 10 fuel types — with
+    **every** spec, every image and all 20 languages. `GET /demo` hands over
+    the whole set in one call, so there is nothing to discover by probing.
+
+    **The demo cannot reach the catalogue, structurally.** This is not a quota
+    and not an allowlist consulted per route: a request carrying a demo key is
+    dispatched, before any catalogue route runs, into a separate router
+    (`src/routes/demo.ts`) that answers entirely from a pre-rendered blob in
+    Workers KV. That module and the set it serves (`src/lib/demo-set.ts`)
+    contain zero references to Hyperdrive or to Postgres — there is no code
+    path from a demo request to a database connection. A leaked demo key
+    therefore cannot be used to walk the catalogue, because the catalogue is
+    not reachable from where that key is answered, no matter how many requests
+    it makes. Anything outside the 40 cars answers `403`, never `404`: the
+    route exists, the tier does not reach it.
+
+    ## 2. Paid
+
+    Two products, both arranged by hand — there is no instant checkout:
+
+      * **The Apify Actor** — the API over the full catalogue, metered and
+        billed per result by Apify's own platform:
+        https://apify.com/carsdatacom/car-specs-api
+      * **A licensed data export** — the modules you need, as CSV and JSON
+        with a field dictionary and a per-field coverage sheet, with an
+        optional update subscription. Priced and ordered on
+        https://cars-data.com/en/api
+
+    `GET /export` is **not** that export and never serves bulk data; it
+    answers `403` with a pointer to the licensing page.
+
+    # Conventions
+
+      * Every success is `{ data, meta }`, plus `links` on paginated lists.
+        `meta.last_synced_at` is on every response.
+      * Every error is RFC 9457 `application/problem+json`.
+      * Identifiers are **opaque tokens**, not integers: `v_1a2b3c4d` for a
+        variant, `g_…` for a generation, `m_…` for a model, `c_…` for a
+        pagination cursor. They are domain-separated — a variant token is
+        refused where a model token is expected — and an unparseable token
+        gets the same `404` as a car that does not exist. Only the `apify`
+        plan receives raw integer ids, because the published Actor's input
+        schema declares `variantId` as an integer.
+      * Attribution is required; see the Terms of Service.
   termsOfService: https://cars-data.com/en/api/terms
   contact:
     name: cars-data.com
-    url: https://cars-data.com/api
+    url: https://cars-data.com/en/api
+    email: office@cars-data.com
   license:
     name: Proprietary — see Terms of Service
     url: https://cars-data.com/en/api/terms
+
 servers:
   - url: https://api.cars-data.com/v1
-    description: Production
+    description: Production (the only deployed environment — this API has no staging)
   - url: http://localhost:8790/v1
     description: Local dev (wrangler dev, Hyperdrive localConnectionString -> cars_v3)
 
 security:
   - ApiKeyAuth: []
+  - BearerAuth: []
 
 tags:
+  - name: service
+    description: Health and documentation — no key needed.
+  - name: keys
+    description: The self-serve demo key — request it, activate it from the email.
+  - name: demo
+    description: What a demo key reaches. Answered from Workers KV; never from the database.
   - name: catalog
-    description: Brands, models, generations — cheap, very long cache
+    description: Brands, models, generations — cheap, very long cache.
   - name: variants
-    description: The "money" endpoints
+    description: Variants and their specs, images and prices.
   - name: utilities
-    description: Search and compare
-  - name: enterprise
-    description: Gated; requires L0 clean provenance
+    description: Search, compare, usage self-check.
+  - name: licensing
+    description: Bulk data — not served here; licensed separately.
 
 paths:
+  # ── service: public, no key ────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [service]
+      summary: Liveness plus the number of active variants
+      description: Public — no API key. Touches the database, so a `200` means the catalogue is actually reachable, not just that the Worker is up.
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthEnvelope'
+
+  /openapi.json:
+    get:
+      tags: [service]
+      summary: This document, as JSON
+      description: |
+        Public and CORS-open (`Access-Control-Allow-Origin: *`). Documentation
+        behind an API key only opens for people who already got in.
+
+        Generated from `openapi.yaml`; a test fails the build if the two drift,
+        and a second test fails if either drifts from the routes the Worker
+        actually mounts.
+      operationId: getOpenApiSpec
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: An OpenAPI 3.1 document.
+
+  /docs:
+    get:
+      tags: [service]
+      summary: Rendered API reference
+      description: Public HTML page that renders `/v1/openapi.json`. The renderer is loaded from a CDN rather than bundled — the Worker ships on every deploy and has no reason to carry a documentation UI.
+      operationId: getDocsPage
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            text/html:
+              schema: { type: string }
+
+  # ── keys: the only self-serve tier ─────────────────────────────────────────
+  /keys/demo:
+    post:
+      tags: [keys]
+      summary: Request a demo key (all fields required)
+      description: |
+        Step 1 of 2. Records the request and emails a one-click activation
+        link. **No key exists yet** and nothing is pending review — the link is
+        the only gate, and it is yours to click.
+
+        Every field is required. They are not a review gate; they are the
+        lead, and asking for them after issuing would mean nobody fills them
+        in.
+
+        Limits: 5 requests per IP per day, one key per email address. The
+        email domain is checked for an MX record, because a key emailed to a
+        domain that cannot receive mail helps nobody.
+      operationId: requestDemoKey
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DemoKeyRequest'
+      responses:
+        '202':
+          description: Recorded; an activation link has been emailed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationSentEnvelope'
+        '400':
+          description: A required field is missing or malformed, or `accept_tos` is not `true`.
+          $ref: '#/components/responses/Problem'
+        '409':
+          description: A key was already issued to this address. We keep only a hash of it and cannot resend it — write to office@cars-data.com.
+          $ref: '#/components/responses/Problem'
+        '422':
+          description: The email domain is disposable, unreachable, or has no mail exchanger.
+          $ref: '#/components/responses/Problem'
+        '429':
+          description: More than 5 key requests from this network today.
+          $ref: '#/components/responses/Problem'
+        '503':
+          description: The request could not be recorded. Ours, not yours — retry shortly.
+          $ref: '#/components/responses/Problem'
+
+  /keys/demo/verify:
+    get:
+      tags: [keys]
+      summary: Activate the key from the emailed link
+      description: |
+        Step 2 of 2, and the endpoint the emailed link points at. Mints the
+        key, returns it **once**, and emails a copy. We store only a hash and
+        cannot show it again.
+
+        The token is burned before the key is minted, so a double click cannot
+        produce two keys. The link works once and expires after 3 days.
+      operationId: verifyDemoKey
+      security: []
+      parameters:
+        - name: t
+          in: query
+          required: true
+          description: The 48-hex-character token from the activation link.
+          schema: { type: string, pattern: '^[0-9a-f]{48}$' }
+      responses:
+        '200':
+          description: The key, shown once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedKeyEnvelope'
+        '400':
+          description: Not a well-formed verification link.
+          $ref: '#/components/responses/Problem'
+        '409':
+          description: Already used, or expired after 3 days. Request a new one.
+          $ref: '#/components/responses/Problem'
+
+  /keys:
+    post:
+      tags: [keys]
+      summary: Alias of POST /keys/demo
+      description: |
+        Identical behaviour to `POST /keys/demo`, same request body, same
+        responses. It exists so a cached page or a copied `curl` line posting
+        here keeps working.
+
+        **It does not issue a reviewed key.** Until 2026-10-06 this endpoint
+        recorded a request that a human approved by hand, and the key it
+        eventually produced reached the whole catalogue. That tier is gone:
+        nothing self-serve reaches the catalogue any more, so there is nothing
+        left to review.
+      operationId: requestDemoKeyAlias
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DemoKeyRequest'
+      responses:
+        '202':
+          description: Recorded; an activation link has been emailed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationSentEnvelope'
+        '400':
+          description: A required field is missing or malformed.
+          $ref: '#/components/responses/Problem'
+        '409':
+          description: A key was already issued to this address.
+          $ref: '#/components/responses/Problem'
+        '422':
+          description: The email domain is disposable or unreachable.
+          $ref: '#/components/responses/Problem'
+        '429':
+          description: More than 5 key requests from this network today.
+          $ref: '#/components/responses/Problem'
+
+  # ── demo tier ──────────────────────────────────────────────────────────────
+  /demo:
+    get:
+      tags: [demo]
+      summary: The whole demo set in one call
+      description: |
+        Every car a demo key can reach, in a single response — so evaluating
+        the demo never requires guessing which cars are in it.
+
+        Answered from a pre-rendered blob in Workers KV. **Demo keys only**: a
+        paid key is routed to the catalogue and will get `404` here, because
+        this path exists only inside the demo router.
+      operationId: getDemoSet
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoSetEnvelope'
+        '503':
+          description: "The demo dataset is being rebuilt. Nothing is wrong with your key — `Retry-After: 300`."
+          $ref: '#/components/responses/Problem'
+
+  # ── catalog ────────────────────────────────────────────────────────────────
   /brands:
     get:
       tags: [catalog]
-      summary: List all brands
+      summary: List brands
+      description: Ordered by popularity, then name. On a demo key this is answered from the blob and lists only the 5 brands in the demo set.
       operationId: listBrands
       parameters:
         - $ref: '#/components/parameters/Locale'
@@ -55,11 +327,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BrandListEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
 
   /brands/{slug}:
     get:
       tags: [catalog]
-      summary: Get one brand
+      summary: One brand by slug
       operationId: getBrand
       parameters:
         - $ref: '#/components/parameters/BrandSlug'
@@ -71,14 +347,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BrandEnvelope'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Outside the demo set (demo keys), or the key is not usable.
+          $ref: '#/components/responses/Problem'
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /brands/{slug}/models:
     get:
       tags: [catalog]
-      summary: List models for a brand
-      operationId: listBrandModels
+      summary: Models of a brand
+      operationId: listModelsOfBrand
       parameters:
         - $ref: '#/components/parameters/BrandSlug'
         - $ref: '#/components/parameters/Locale'
@@ -91,17 +370,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ModelListEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /models/{id}/generations:
     get:
       tags: [catalog]
-      summary: List generations for a model
-      operationId: listModelGenerations
+      summary: Generations of a model
+      operationId: listGenerationsOfModel
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
+        - $ref: '#/components/parameters/ModelId'
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
@@ -112,17 +391,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenerationListEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such model — and the same answer for a token that does not decode, so a guess and a missing car are indistinguishable.
+          $ref: '#/components/responses/Problem'
 
   /generations/{id}/variants:
     get:
       tags: [catalog]
-      summary: List variants for a generation
-      operationId: listGenerationVariants
+      summary: Variants of a generation
+      operationId: listVariantsOfGeneration
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
+        - $ref: '#/components/parameters/GenerationId'
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
@@ -133,12 +414,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariantListEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /specs/catalog:
     get:
       tags: [catalog]
-      summary: The 224 spec definitions + units + metadata
-      operationId: getSpecsCatalog
+      summary: The spec dictionary — every spec key, its label, unit and group
+      description: The 224 spec types, localized. Read this once to know what the keys in `/variants/{id}/specs` mean.
+      operationId: listSpecDefinitions
       parameters:
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
@@ -150,34 +435,106 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SpecDefinitionListEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not part of the demo tier — a demo key gets `403` with the upgrade path.
+          $ref: '#/components/responses/Problem'
 
-  /variants/{id}:
+  # ── variants ───────────────────────────────────────────────────────────────
+  /variants:
     get:
       tags: [variants]
-      summary: Full specs for one variant (language-neutral)
-      operationId: getVariant
+      summary: Filter variants
+      description: |
+        Structured filtering. Paginated with a **keyset** cursor, not an
+        offset: `links.next` carries an opaque `c_…` token to hand back as
+        `?cursor=`. Page size is capped at 50.
+
+        Not part of the demo tier.
+      operationId: filterVariants
       parameters:
-        - $ref: '#/components/parameters/VariantId'
-        - $ref: '#/components/parameters/Units'
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: fuel
+          in: query
+          description: Fuel slug, e.g. `benzine`, `elektrisch`.
+          schema: { type: string }
+        - name: body
+          in: query
+          description: Body type, matched against the English body-type label.
+          schema: { type: string }
+        - name: drive
+          in: query
+          description: Drivetrain.
+          schema: { type: string }
+        - name: power_min
+          in: query
+          description: Minimum power, hp.
+          schema: { type: integer }
+        - name: power_max
+          in: query
+          description: Maximum power, hp.
+          schema: { type: integer }
+        - name: price_max
+          in: query
+          description: Maximum new list price, EUR.
+          schema: { type: integer }
+        - name: year
+          in: query
+          description: Production year covered by the generation.
+          schema: { type: integer }
+        - name: ev
+          in: query
+          description: Pass `true` for battery-electric variants only. Any other value is ignored.
+          schema: { type: boolean }
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VariantEnvelope'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: '#/components/schemas/VariantListEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /variants/{id}:
+    get:
+      tags: [variants]
+      summary: One variant, with its full language-neutral spec document
+      description: |
+        Returns the summary fields plus `spec_count` and `specs` — the raw,
+        language-neutral spec document. For localized labels and units use
+        `/variants/{id}/specs`.
+
+        In the demo tier the same path answers from the blob and returns the
+        summary fields only (no `specs`); a car outside the 40 gets `403`.
+      operationId: getVariant
+      parameters:
+        - $ref: '#/components/parameters/VariantId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantDetailEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: On a demo key, this car is outside the demo set.
+          $ref: '#/components/responses/Problem'
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /variants/{id}/specs:
     get:
       tags: [variants]
-      summary: Localized specs for one variant — the headline differentiator (20 languages)
+      summary: Localized specs for one variant
+      description: Spec values and units resolved into the requested language. In the demo tier this is answered from the blob, for the 40 cars, in all 20 languages.
       operationId: getVariantSpecs
       parameters:
         - $ref: '#/components/parameters/VariantId'
         - $ref: '#/components/parameters/Locale'
-        - $ref: '#/components/parameters/Units'
       responses:
         '200':
           description: OK
@@ -185,18 +542,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariantSpecsEnvelope'
-        '402':
-          description: |
-            x402 payment required. Only returned when calling without an API
-            key and X402_ENABLED=true (Phase 1 §6 — this is the ONLY endpoint
-            gated by x402). Standard API-key requests never see this.
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: On a demo key, this car is outside the demo set.
+          $ref: '#/components/responses/Problem'
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /variants/{id}/images:
     get:
       tags: [variants]
-      summary: Image URLs for a variant (own CDN, no attribution burden)
+      summary: Images for one variant
+      description: CDN URLs. Images **are** included in the demo — 40 cars' worth, which is what makes a demo convincing.
       operationId: getVariantImages
       parameters:
         - $ref: '#/components/parameters/VariantId'
@@ -207,14 +563,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImageListEnvelope'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: On a demo key, this car is outside the demo set.
+          $ref: '#/components/responses/Problem'
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /variants/{id}/prices:
     get:
       tags: [variants]
-      summary: Current price snapshot (labeled snapshot, not history — single 2026-05-10 dataset)
-      operationId: getVariantPrices
+      summary: Latest new-car list price snapshot (NL)
+      description: |
+        A single point-in-time snapshot of the Dutch new-car list price, not a
+        history series — read `as_of`. The full price history (~290k price
+        points by model year) is a licensed module, not an API surface.
+
+        Not part of the demo tier.
+      operationId: getVariantPrice
       parameters:
         - $ref: '#/components/parameters/VariantId'
       responses:
@@ -224,59 +589,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PriceSnapshotEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No such variant, or no price snapshot recorded for it.
+          $ref: '#/components/responses/Problem'
 
-  /variants:
-    get:
-      tags: [variants]
-      summary: Filter variants
-      operationId: filterVariants
-      parameters:
-        - $ref: '#/components/parameters/Locale'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Limit'
-        - name: fuel
-          in: query
-          schema: { type: string }
-        - name: body
-          in: query
-          schema: { type: string }
-        - name: power_min
-          in: query
-          schema: { type: integer }
-        - name: power_max
-          in: query
-          schema: { type: integer }
-        - name: price_max
-          in: query
-          schema: { type: integer }
-        - name: year
-          in: query
-          schema: { type: integer }
-        - name: drive
-          in: query
-          schema: { type: string }
-        - name: ev
-          in: query
-          schema: { type: boolean }
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VariantListEnvelope'
-
+  # ── utilities ──────────────────────────────────────────────────────────────
   /search:
     get:
       tags: [utilities]
-      summary: Typeahead search (reuses lib/server/search.ts)
-      operationId: search
+      summary: Typeahead search over variant names
+      description: Trigram matching on brand, model and display name. In the demo tier this is a substring match over the 40 rows, in the Worker — there is no catalogue behind it to walk.
+      operationId: searchVariants
       parameters:
         - name: q
           in: query
           required: true
+          description: The search phrase.
           schema: { type: string, minLength: 1 }
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
@@ -288,18 +618,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SearchResultEnvelope'
+        '400':
+          description: Missing `q`.
+          $ref: '#/components/responses/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /compare:
     get:
       tags: [utilities]
-      summary: Side-by-side spec compare (reuses compare-picker.ts)
-      operationId: compare
+      summary: Side-by-side specs for 2–4 variants
+      description: |
+        Ids are decoded strictly: one unreadable token fails the whole call
+        with `400`, rather than quietly comparing the cars that did parse.
+
+        Available in the demo tier, for cars inside the 40.
+      operationId: compareVariants
       parameters:
         - name: ids
           in: query
           required: true
-          description: 2-4 variant IDs, comma-separated
-          schema: { type: string, example: "1,2,3" }
+          description: 2–4 opaque variant tokens, comma-separated.
+          schema: { type: string, example: "v_1a2b3c4d,v_5e6f7a8b" }
         - $ref: '#/components/parameters/Locale'
       responses:
         '200':
@@ -308,35 +649,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompareEnvelope'
-
-  /export:
-    get:
-      tags: [enterprise]
-      summary: Bulk/delta export (cursor-paginated) — GATED, disabled in Phase 1
-      description: |
-        Endpoint exists per the contract but is disabled/403 until L0 clean
-        provenance clears (see specs/plans/BIZ-L0-data-enrichment-clean-sourcing.md).
-        Do not enable without a legal review pass beyond the Phase-1 ToS.
-      operationId: exportVariants
-      x-phase1-gated: true
-      parameters:
-        - name: since
-          in: query
-          schema: { type: string, format: date-time }
-      responses:
+        '400':
+          description: Missing `ids`, fewer than 2 or more than 4, or one of them is not a valid variant token.
+          $ref: '#/components/responses/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
-          description: Gated in Phase 1 — see description.
-        '200':
-          description: (disabled) OK when ungated post-L0
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VariantListEnvelope'
+          description: On a demo key, at least one of the cars is outside the demo set.
+          $ref: '#/components/responses/Problem'
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /usage:
     get:
       tags: [utilities]
-      summary: Self-check current key's usage against its plan quota
+      summary: This key's plan and month-to-date usage
       operationId: getUsage
       responses:
         '200':
@@ -345,6 +670,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UsageEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not part of the demo tier.
+          $ref: '#/components/responses/Problem'
+
+  # ── licensing ──────────────────────────────────────────────────────────────
+  /export:
+    get:
+      tags: [licensing]
+      summary: Always 403 — bulk data is licensed, not served
+      description: |
+        This endpoint exists so that asking for bulk data gets a straight
+        answer instead of a `404`. It never returns data.
+
+        Exports are arranged by hand: pick the modules you need, in the
+        languages you need, optionally with an update subscription. Prices,
+        module list and coverage sheet are published on
+        https://cars-data.com/en/api — the module prices start at €190 and the
+        catalogue module (€490) is always included. Orders are invoiced; there
+        is no instant checkout.
+
+        If what you want is the API over the full catalogue rather than a file,
+        that is the Apify Actor: https://apify.com/carsdatacom/car-specs-api
+      operationId: getExport
+      responses:
+        '403':
+          description: Always. The detail carries the licensing link.
+          $ref: '#/components/responses/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
 components:
   securitySchemes:
@@ -352,53 +706,109 @@ components:
       type: apiKey
       in: header
       name: X-Api-Key
+      description: "The usual way. `X-Api-Key: cd_demo_…`"
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer <key>` — accepted everywhere `X-Api-Key` is, and
+        what most MCP clients send.
 
   parameters:
     Locale:
       name: locale
       in: query
-      description: One of the 19 supported languages. Defaults to `en`.
+      description: |
+        One of the 20 published languages. Anything else — including a language
+        the site does not publish — falls back to `en` silently.
       schema:
         type: string
         default: en
-        enum: [en, ro, fr, de, es, it, sr, hr, pt, pl, cs, sk, hu, no, sv, el, bg, da, ar]
-    Units:
-      name: units
-      in: query
-      schema:
-        type: string
-        enum: [metric, imperial]
-        default: metric
+        enum: [ar, bg, cs, da, de, el, en, es, fr, hr, hu, it, 'no', pl, pt, ro, sk, sr, sv, tr]
     Cursor:
       name: cursor
       in: query
-      description: Opaque pagination token — pass back the `links.next` value from the previous page. Omit for the first page.
-      schema: { type: string }
+      description: |
+        Opaque pagination token — hand back the `links.next` value from the
+        previous page. Omit it for the first page. A token that cannot be read
+        restarts from the first page rather than failing, so a client holding a
+        stale cursor pages again instead of breaking.
+      schema: { type: string, example: "c_0a1b2c3d" }
     Limit:
       name: limit
       in: query
-      description: Page size, 1–50. Defaults to 50.
+      description: Page size, 1–50. Values above 50 are clamped to 50.
       schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
-    Fields:
-      name: fields
-      in: query
-      description: Sparse fieldset, comma-separated
-      schema: { type: string }
     VariantId:
       name: id
       in: path
       required: true
-      schema: { type: integer }
-      description: variant_id == variants.public_id
+      description: Opaque variant token, `v_` followed by 8 hex characters.
+      schema: { type: string, pattern: '^v_[0-9a-f]{8}$', example: "v_1a2b3c4d" }
+    ModelId:
+      name: id
+      in: path
+      required: true
+      description: Opaque model token, `m_` followed by 8 hex characters.
+      schema: { type: string, pattern: '^m_[0-9a-f]{8}$', example: "m_1a2b3c4d" }
+    GenerationId:
+      name: id
+      in: path
+      required: true
+      description: Opaque generation token, `g_` followed by 8 hex characters.
+      schema: { type: string, pattern: '^g_[0-9a-f]{8}$', example: "g_1a2b3c4d" }
     BrandSlug:
       name: slug
       in: path
       required: true
+      description: Canonical brand slug, e.g. `volkswagen`. Slugs are stable and public; only numeric ids are tokenised.
       schema: { type: string }
 
   responses:
+    Problem:
+      description: RFC 9457 problem document.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
     NotFound:
-      description: Not found
+      description: Not found. A token that does not decode gets this too.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: |
+        No key, or a key we do not know. `WWW-Authenticate: Bearer` on the MCP
+        surface. The MCP server needs no key at all; a REST demo key is one
+        click away.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: |
+        The key is revoked or not yet active, or — on a demo key — the path is
+        outside the demo tier. The detail says which, and carries the upgrade
+        path.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    TooManyRequests:
+      description: |
+        A limit on **your** key: per-minute, per-day or per-month. The detail
+        names which. Distinct from `503`, which is a failure on our side.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unavailable:
+      description: |
+        **Ours, not yours.** Request metering is unavailable and the request is
+        refused rather than served uncounted — the API fails closed. Comes with
+        `Retry-After`. A client must not treat this as a signal to throttle
+        itself.
       content:
         application/problem+json:
           schema:
@@ -407,9 +817,10 @@ components:
   schemas:
     ProblemDetail:
       type: object
-      description: RFC 9457 problem+json
+      description: RFC 9457 `application/problem+json`.
+      required: [type, title, status]
       properties:
-        type: { type: string }
+        type: { type: string, default: "about:blank" }
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
@@ -425,23 +836,114 @@ components:
     Links:
       type: object
       properties:
-        next: { type: [string, "null"] }
+        next:
+          type: [string, "null"]
+          description: Opaque cursor for the next page; absent when the page was not full.
+
+    Health:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+        active_variants: { type: integer }
+
+    DemoKeyRequest:
+      type: object
+      description: Every field is required.
+      required: [email, name, company, website, role, use_case, accept_tos]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Where the activation link goes. Disposable domains and domains without an MX record are refused.
+        name: { type: string, minLength: 2, maxLength: 120 }
+        company:
+          type: string
+          minLength: 2
+          maxLength: 120
+          description: The organisation the key is for — your own name if you are independent.
+        website:
+          type: string
+          maxLength: 200
+          description: The site or app the data will be used in, e.g. `https://example.com`.
+        role:
+          type: string
+          minLength: 2
+          maxLength: 80
+          description: Your role there, e.g. developer, CTO, founder.
+        use_case:
+          type: string
+          minLength: 20
+          maxLength: 2000
+          description: What you intend to build. At least 20 characters.
+        accept_tos:
+          type: boolean
+          const: true
+          description: Must be exactly `true`. See https://cars-data.com/en/api/terms
+
+    VerificationSent:
+      type: object
+      properties:
+        status: { type: string, const: verification_sent }
+        note: { type: string }
+
+    IssuedKey:
+      type: object
+      description: Returned once and never again — we store only a hash.
+      properties:
+        api_key: { type: string, example: "cd_demo_0123456789abcdef0123456789abcdef0123456789abcdef" }
+        plan: { type: string, const: demo }
+        covers: { type: string, description: "The demo set, in words — e.g. \"40 cars — Volkswagen: Golf, Transporter · BMW: 3-serie, i3 · …\"" }
+        start_here: { type: string, format: uri }
+        full_catalogue: { type: string, format: uri }
+        note: { type: string }
+
+    DemoSet:
+      type: object
+      properties:
+        set: { type: string, description: The brands and models in the set, in words. }
+        variant_count: { type: integer, const: 40 }
+        fuels:
+          type: array
+          items: { type: string }
+          description: Every fuel type represented in the set.
+        variants:
+          type: array
+          items: { $ref: '#/components/schemas/DemoVariant' }
+        upgrade: { type: string, description: What to do when 40 cars are not enough. }
+
+    DemoVariant:
+      type: object
+      description: A demo row. Same opaque tokens as the catalogue, same field names, fewer fields.
+      properties:
+        variant_id: { type: string, example: "v_1a2b3c4d" }
+        generation_id: { type: string, example: "g_1a2b3c4d" }
+        model_id: { type: string, example: "m_1a2b3c4d" }
+        brand: { type: string }
+        model: { type: string }
+        generation: { type: string }
+        display_name: { type: string }
+        fuel: { type: [string, "null"] }
+        body_type: { type: [string, "null"] }
+        years: { type: [string, "null"] }
+        power_hp: { type: [integer, "null"] }
+        battery_kwh: { type: [number, "null"] }
+        price_new_eur: { type: [integer, "null"] }
 
     Brand:
       type: object
       properties:
-        id: { type: integer }
+        id: { type: integer, description: Brand public id. Brands are not tokenised — they are already public on the site and in the sitemaps. }
         slug: { type: string }
-        name: { type: string }
+        name: { type: string, description: Localized display name. }
         sameAs:
           type: array
-          items: { type: string }
-          description: Wikidata/Wikipedia links (T37 pattern), when available.
+          items: { type: string, format: uri }
+          description: Wikidata link when known; an empty array otherwise.
 
     Model:
       type: object
       properties:
-        id: { type: integer }
+        id: { type: string, example: "m_1a2b3c4d" }
         brand_id: { type: integer }
         slug: { type: string }
         name: { type: string }
@@ -449,28 +951,30 @@ components:
     Generation:
       type: object
       properties:
-        id: { type: integer }
-        model_id: { type: integer }
+        id: { type: string, example: "g_1a2b3c4d" }
+        model_id: { type: string, example: "m_1a2b3c4d" }
         slug: { type: string }
-        year_start: { type: integer }
+        name: { type: string }
+        year_start: { type: [integer, "null"] }
         year_end: { type: [integer, "null"] }
 
     SpecValue:
       type: object
-      description: One resolved spec value from variant_doc.specs[spec_key]
+      description: One resolved spec value.
       properties:
         v:
-          description: Native value (number/bool/string) or localized label at read-time
+          description: The value — number, boolean, or a localized label.
         u:
           type: [string, "null"]
-          description: 'Unit, e.g. "kW", "km/h"'
+          description: 'Unit, e.g. "kW", "km/h".'
         confidence: { type: [number, "null"] }
 
     Variant:
       type: object
+      description: The summary projection used by every list endpoint.
       properties:
-        variant_id: { type: integer }
-        generation_id: { type: integer }
+        variant_id: { type: string, example: "v_1a2b3c4d" }
+        generation_id: { type: string, example: "g_1a2b3c4d" }
         display_name: { type: string }
         power_hp: { type: [integer, "null"] }
         battery_kwh: { type: [number, "null"] }
@@ -480,12 +984,24 @@ components:
         fuel_slug: { type: [string, "null"] }
         body_type_en: { type: [string, "null"] }
         price_new_eur: { type: [integer, "null"] }
-        spec_count: { type: integer }
+
+    VariantDetail:
+      allOf:
+        - $ref: '#/components/schemas/Variant'
+        - type: object
+          properties:
+            spec_count:
+              type: integer
+              description: How many spec values this variant has. `0` for the handful with none.
+            specs:
+              type: object
+              description: The raw, language-neutral spec document. `{}` when the variant has no spec rows. Use `/variants/{id}/specs` for localized labels.
+              additionalProperties: true
 
     VariantSpecs:
       type: object
       properties:
-        variant_id: { type: integer }
+        variant_id: { type: string, example: "v_1a2b3c4d" }
         locale: { type: string }
         specs:
           type: object
@@ -508,32 +1024,60 @@ components:
 
     PriceSnapshot:
       type: object
-      description: Single point-in-time snapshot. NOT a history series — label as_of.
+      description: A single point-in-time snapshot, not a history series.
       properties:
-        variant_id: { type: integer }
+        variant_id: { type: string, example: "v_1a2b3c4d" }
         price_eur: { type: [integer, "null"] }
         as_of: { type: string, format: date }
 
     SearchResult:
       type: object
       properties:
-        variant_id: { type: integer }
+        variant_id: { type: string, example: "v_1a2b3c4d" }
         display_name: { type: string }
         brand_slug: { type: string }
         model_slug: { type: string }
-        generation_id: { type: integer, description: Generation this variant belongs to — disambiguates same-named variants across generations }
-        year_from: { type: [integer, "null"], description: Generation production start year }
-        year_to: { type: [integer, "null"], description: Generation production end year (null if still produced) }
+        generation_id: { type: string, example: "g_1a2b3c4d" }
+        year_from: { type: [integer, "null"] }
+        year_to: { type: [integer, "null"] }
 
     Usage:
       type: object
       properties:
-        plan: { type: string, enum: [free, apify, x402] }
-        used: { type: integer }
+        plan:
+          type: string
+          enum: [demo, apify, free]
+          description: |
+            `demo` — the self-serve tier, 40 cars.
+            `apify` — the paid channel, metered and billed by Apify.
+            `free` — **legacy and deprecated.** Nothing has issued one since
+            2026-10-06 and the plan is being removed; it can still appear on a
+            key granted by hand before that date.
+        used: { type: integer, description: "Calls counted this month. Counting is best-effort and is known to under-count; it is not a billing record." }
         quota: { type: integer }
         resets_at: { type: string, format: date-time }
 
-    # --- Envelopes: { data, meta, links? } per L2a §2 ---
+    # --- Envelopes: { data, meta, links? } ---
+    HealthEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Health' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    VerificationSentEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/VerificationSent' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    IssuedKeyEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/IssuedKey' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    DemoSetEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/DemoSet' }
+        meta: { $ref: '#/components/schemas/Meta' }
     BrandListEnvelope:
       type: object
       properties:
@@ -563,10 +1107,10 @@ components:
         data: { type: array, items: { $ref: '#/components/schemas/Variant' } }
         meta: { $ref: '#/components/schemas/Meta' }
         links: { $ref: '#/components/schemas/Links' }
-    VariantEnvelope:
+    VariantDetailEnvelope:
       type: object
       properties:
-        data: { $ref: '#/components/schemas/Variant' }
+        data: { $ref: '#/components/schemas/VariantDetail' }
         meta: { $ref: '#/components/schemas/Meta' }
     VariantSpecsEnvelope:
       type: object
