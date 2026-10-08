@@ -20,8 +20,16 @@
  *  touching either constant cannot reach the deploy queue while they diverge.
  *
  *  Version history lives in ONE place, v3/lib/config/data-pricing.ts, and is
- *  appended to, never rewritten. (T167, D-01, owner 2026-10-08.) */
-export const TOS_VERSION = "2026-10-08-v3";
+ *  appended to, never rewritten. (T167, D-01, owner 2026-10-08.)
+ *
+ *  2026-10-08-v4: the published text changed — the ban on training,
+ *  fine-tuning, evaluating or benchmarking ML/AI models is gone from A5 and
+ *  B4, in all 20 locales (T178, owner decision 2026-10-08). A prohibition we
+ *  cannot observe is worse than none: once the export sits on the customer's
+ *  disk nothing tells us what was trained on it. The competing-product and
+ *  resale bans stay, and they still cover the case that matters. Paired branch
+ *  in v3: fix/t178-drop-ml-training-clause. */
+export const TOS_VERSION = "2026-10-08-v4";
 
 /** "clearfly.co.uk" is a fine answer, so a missing scheme is added rather than
  *  refused. What must hold: http(s), a dotted hostname, nothing else. Returns
