@@ -2,9 +2,26 @@
 // alias can point one way: keys.ts imports the handler from keys-demo.ts, and
 // a constant living in keys.ts would have closed that into a cycle.
 
-/** Must match DATA_TERMS_VERSION in v3/lib/config/data-pricing.ts — the
- *  published text at /en/api/terms (T73). Bump both together. */
-export const TOS_VERSION = "2026-10-02-v1";
+/** The version recorded against every key we issue. MUST equal
+ *  DATA_TERMS_VERSION in v3/lib/config/data-pricing.ts — the text actually
+ *  published at /{locale}/api/terms (T73). Bump BOTH, in the same delivery.
+ *
+ *  "Bump both together" was already written here and it still did not happen:
+ *  v3 moved to 2026-10-06-v2 on 2026-10-06 (T119, the A12 governing-language
+ *  clause) and this line stayed on 2026-10-02-v1 for two days. The consequence
+ *  is not cosmetic and is not repairable after the fact — a key issued in that
+ *  window recorded v1 while the requester had just clicked through v2. No key
+ *  in existence records 2026-10-06-v2 at all; this constant skipped it.
+ *
+ *  A unit test cannot catch this: the other constant is in another repo and
+ *  this one's tests never see it. The guard that can is
+ *  specs/tools/check-terms-version.sh in the specs repo, which reads both
+ *  working copies and is run by specs/tools/enqueue-delivery.sh — so a branch
+ *  touching either constant cannot reach the deploy queue while they diverge.
+ *
+ *  Version history lives in ONE place, v3/lib/config/data-pricing.ts, and is
+ *  appended to, never rewritten. (T167, D-01, owner 2026-10-08.) */
+export const TOS_VERSION = "2026-10-08-v3";
 
 /** "clearfly.co.uk" is a fine answer, so a missing scheme is added rather than
  *  refused. What must hold: http(s), a dotted hostname, nothing else. Returns
