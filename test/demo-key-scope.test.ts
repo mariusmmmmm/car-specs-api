@@ -174,9 +174,24 @@ describe("a demo KEY is confined to the sample — MCP (T165)", () => {
     for (const r of rows) expect(FAKE_IDS.has(r.variant_id)).toBe(true);
   });
 
-  test("a PAID key still gets the database — the fix narrows the demo, not the API", async () => {
+  // Era pe dos până la 2026-10-08: „o cheie plătită primește baza". Strategia
+  // owner-ului (D-01) spune altceva — plătit înseamnă Actor-ul Apify, care
+  // facturează per rezultat, și exportul licențiat. MCP e suprafața demo.
+  // Actor-ul apelează /v1, nu /mcp (măsurat în apify-actor/src), deci o cheie
+  // apify pe /mcp n-avea consumator legitim — doar expunere dacă scurgea.
+  test("nici măcar o cheie plătită nu trece de demo pe MCP — suprafața, nu planul, decide", async () => {
     const src = await sourceFor(await env(), { keyPrefix: "abcd1234", demo: isDemoScope({ plan: "apify" }) });
-    expect(src!.demo).toBe(false);
-    await expect(src!.search("en", "x", 1)).rejects.toThrow(/database connection/);
+    expect(src!.demo).toBe(true);
+    const rows = (await src!.search("en", "", 50)) as { variant_id: number }[];
+    expect(rows).toHaveLength(40);
+  });
+
+  // Garda de regresie care contează: `demo` din props nu mai poate reactiva
+  // baza. Dacă cineva reintroduce o ramură pe plan, testul ăsta pică.
+  test("nici un props nu mai poate cere baza", async () => {
+    for (const props of [{}, { demo: false }, { demo: false, keyPrefix: "deadbeef" }]) {
+      const src = await sourceFor(await env(), props);
+      expect(src!.demo).toBe(true);
+    }
   });
 });

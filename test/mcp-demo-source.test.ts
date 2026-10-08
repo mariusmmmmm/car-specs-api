@@ -87,18 +87,15 @@ describe("MCP demo source — the blob, never the database (T111 D9)", () => {
     expect(await demoSource(env(null), "en")).toBeNull();
   });
 
-  // NOT "a key holder" any more (T165): a demo-plan key is on the demo scope
-  // too, and index.ts derives that through isDemoScope(). What `props` without
-  // `demo` means here is only "a caller the dispatcher placed off the demo
-  // scope" — see test/demo-key-scope.test.ts for the decision itself.
-  test("sourceFor gives the demo scope the blob and everyone else the database", async () => {
-    expect((await sourceFor(env(), { demo: true, locale: "en" }))!.demo).toBe(true);
-    // the db source is constructed lazily, so asking for it must not throw yet
-    const db = await sourceFor(env(), {});
-    expect(db!.demo).toBe(false);
-    // ...but using it would, which is exactly how the demo test above proves itself
-    await expect(db!.search("en", "x", 1)).rejects.toThrow(/database connection/);
-  });
+    // Contractul s-a strâns încă o dată pe 2026-10-08 (D-01): MCP e suprafața
+    // demo pentru ORICINE. Nu mai există ramură spre bază — `dbSource` a fost
+    // SCOS, nu doar ocolit, fiindcă o regulă cu o excepție se uită, iar exact
+    // din forma aia a ieșit defectul găsit de T165.
+    test("sourceFor întoarce blobul indiferent de props — nu mai are ce alege", async () => {
+      expect((await sourceFor(env(), { demo: true, locale: "en" }))!.demo).toBe(true);
+      expect((await sourceFor(env(), {}))!.demo).toBe(true);
+      expect((await sourceFor(env(), { demo: false }))!.demo).toBe(true);
+    });
 });
 
 describe("anonymous demo rate limit", () => {

@@ -1,8 +1,5 @@
 import type { Env, McpProps } from "../types";
 import type { KeyRecord } from "./apikey";
-import { getDb } from "./db";
-import { searchVariants, listGenerationsForModel, filterVariants, getVariantImages } from "./queries";
-import { localizeVariantSpecs } from "./localize-variant";
 import { loadDemoPayload, type DemoVariant } from "./demo-payload";
 import { demoSetReady } from "./demo-set";
 
@@ -37,32 +34,6 @@ export type McpSource = {
   images(variantId: number): Promise<unknown[]>;
 };
 
-export function dbSource(env: Env): McpSource {
-  return {
-    demo: false,
-    async search(locale, query, limit) {
-      return searchVariants(getDb(env), locale, query, limit);
-    },
-    async specs(locale, variantId) {
-      const r = await localizeVariantSpecs(getDb(env), locale, variantId);
-      return r ? { last_synced_at: r.last_synced_at.toISOString(), specs: r.specs } : null;
-    },
-    async generations(locale, modelId) {
-      return listGenerationsForModel(getDb(env), locale, modelId);
-    },
-    async filter(locale, f) {
-      return filterVariants(getDb(env), locale, {
-        fuel: f.fuel, body: f.body, drive: f.drive,
-        powerMin: f.powerMin ?? null, powerMax: f.powerMax ?? null,
-        priceMax: f.priceMax ?? null, year: f.year ?? null,
-        ev: f.ev ?? false, limit: f.limit,
-      });
-    },
-    async images(variantId) {
-      return getVariantImages(getDb(env), variantId);
-    },
-  };
-}
 
 const row = (v: DemoVariant) => ({
   variant_id: v.variant_id,
@@ -150,6 +121,26 @@ export const DEMO_UNSUPPORTED_FILTERS = ["drive", "year"] as const;
 export const isDemoScope = (record: Pick<KeyRecord, "plan"> | null): boolean =>
   record === null || record.plan === "demo";
 
+/** MCP este suprafața DEMO. Întotdeauna, pentru oricine.
+ *
+ *  Strategia owner-ului (D-01, 2026-10-08): două niveluri — demo și plătit.
+ *  Plătit înseamnă Actor-ul Apify, care facturează per rezultat pe platforma
+ *  lor, și exportul licențiat. MCP nu e niciunul din ele: e suprafața pe care
+ *  un agent te găsește fără nicio cheie.
+ *
+ *  De ce nu mai există o ramură spre bază aici. Până pe 2026-10-08 regula avea
+ *  o excepție — planul `apify` primea catalogul — iar excepția nu era scrisă
+ *  nicăieri ca funcție. Exact din forma asta a ieșit defectul pe care l-a găsit
+ *  T165: o cheie demo, pe care și-o emite oricine din formular, ajungea la tot
+ *  catalogul. O regulă cu o excepție se uită; una fără, nu.
+ *
+ *  Nu pierde nimic: Actor-ul apelează `/v1`, nu `/mcp` — măsurat în sursa lui
+ *  (`apify-actor/src`, un singur endpoint: `https://api.cars-data.com/v1`).
+ *  Cheia `apify` pe `/mcp` n-avea niciun consumator legitim, doar expunere dacă
+ *  scurgea din mediul Actor-ului.
+ *
+ *  Dacă vreodată se vrea MCP plătit, e o construcție deliberată, nu o
+ *  comutare de flag — iar asta e tocmai ce o face sigură. */
 export async function sourceFor(env: Env, props: McpProps): Promise<McpSource | null> {
-  return props.demo ? demoSource(env, props.locale ?? "en") : dbSource(env);
+  return demoSource(env, props.locale ?? "en");
 }
