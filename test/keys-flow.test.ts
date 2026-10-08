@@ -5,6 +5,7 @@ import { keysDemo } from "../src/routes/keys-demo";
 import { admin } from "../src/routes/admin";
 import { authenticate, readApiKey } from "../src/lib/auth-key";
 import { sha256Hex, type KeyRecord } from "../src/lib/apikey";
+import { TOS_VERSION } from "../src/lib/key-request";
 import type { Env } from "../src/types";
 
 // The MX lookup is a real DNS-over-HTTPS call; stubbed so these tests do not
@@ -283,6 +284,40 @@ describe("admin grant — the only path to a non-demo key", () => {
   it("refuses a plan it does not know, rather than inventing one", async () => {
     expect((await adminCall("/grant?email=x@carscope.de&plan=enterprise", "POST")).status).toBe(400);
     expect((await adminCall("/grant?email=not-an-email&plan=demo", "POST")).status).toBe(400);
+  });
+});
+
+// T168: the admin listing is the owner's ONLY read surface over the keys, and
+// it projected seven fields — `tos_version` was not one of them, although every
+// record carries it. So "what did this person actually agree to?" could only be
+// answered by reading raw KV. That mattered in the real: between 10-06 and
+// 10-08 the site published `2026-10-06-v2` while the Worker stamped
+// `2026-10-02-v1` on keys, and the divergence went unseen for two days.
+describe("admin keys listing shows what each key accepted (T168)", () => {
+  it("reports tos_version for a key it just granted", async () => {
+    expect((await adminCall("/grant?email=mirsad@softcrafter.net&plan=apify", "POST")).status).toBe(200);
+    const res = await adminCall("/keys");
+    expect(res.status).toBe(200);
+    const { data } = await res.json() as { data: Record<string, unknown>[] };
+    expect(data).toHaveLength(1);
+    expect(data[0].tos_version).toBe(TOS_VERSION);
+  });
+
+  // Read off the record, not re-derived from the current constant: the whole
+  // point is to SEE a key that accepted something other than today's text.
+  it("reports each key's OWN version, including one that predates the current terms", async () => {
+    const put = async (raw: string, r: Partial<KeyRecord>) =>
+      store.set(`key:${await sha256Hex(raw)}`, JSON.stringify({
+        email: "old@carscope.de", plan: "free", tos_version: "2026-07-26-draft-v1",
+        tos_accepted_at: "2026-07-26T00:00:00.000Z", created_at: "2026-07-26T00:00:00.000Z",
+        email_verified: false, approved: true, ...r,
+      }));
+    await put("cd_free_july", {});
+    await put("cd_demo_oct", { plan: "demo", tos_version: "2026-10-03-v1", created_at: "2026-10-03T00:00:00.000Z" });
+
+    const { data } = await (await adminCall("/keys")).json() as { data: Record<string, unknown>[] };
+    expect(data.map((r) => r.tos_version)).toEqual(["2026-07-26-draft-v1", "2026-10-03-v1"]);
+    expect(data.map((r) => r.tos_version)).not.toContain(TOS_VERSION);
   });
 });
 

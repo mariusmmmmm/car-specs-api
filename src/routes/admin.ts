@@ -125,6 +125,13 @@ admin.get("/keys", async (c) => {
     key_hash_prefix: name.slice(4, 12),
     email: r.email,
     plan: r.plan,
+    // T168: the only evidence of WHICH terms text a holder accepted. Every
+    // record has carried it since the first key; this listing did not project
+    // it, so the owner's one read surface could not answer "what did they
+    // agree to?" without a raw KV read. That blind spot is how the Worker
+    // stamping `2026-10-02-v1` while the site published `2026-10-06-v2` went
+    // unnoticed for two days (T167).
+    tos_version: r.tos_version,
     created_at: r.created_at,
     approved: r.approved === true,
     revoked: Boolean(r.revoked_at),
