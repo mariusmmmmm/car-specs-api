@@ -23,24 +23,24 @@
  *  exists to prevent, recreated one database over.
  *
  *  Re-run the verifier after every prod data deploy, not after every import. */
-export const CATALOGUE_AS_OF = "2026-10-06";
+export const CATALOGUE_AS_OF = "2026-10-10";
 
 export const CATALOGUE = {
   /** Active variants in prod. */
-  variants: 103_099,
-  /** Variants carrying a spec document — 103.098 of 103.099 in prod, i.e. all
+  variants: 103_372,
+  /** Variants carrying a spec document — 103.371 of 103.372 in prod, i.e. all
    *  but one. The "909 missing" noted earlier was a local-replica artifact:
    *  mid-import the replica had fewer spec docs than live. */
-  variantsWithSpecs: 103_098,
+  variantsWithSpecs: 103_371,
   /** Brands with at least one active variant — NOT the 527-row master list. */
-  brands: 119,
-  generations: 5_395,
+  brands: 120,
+  generations: 5_428,
   /** Spec types DEFINED in specs_catalog (all active). */
   specTypesDefined: 224,
   /** Spec types that actually appear in prod data. Published separately from
    *  the definitions because 224 as a promise of what you GET is an overclaim —
-   *  but the honest figure is 221, not the 163 the local replica showed. */
-  specTypesPresent: 221,
+   *  but the honest figure is 222, not the 163 the local replica showed. */
+  specTypesPresent: 222,
   specCategories: 21,
   /** Site locales. Derived from SUPPORTED_LOCALES, never typed. */
   get locales(): number {
