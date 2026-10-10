@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, Variables } from "../types";
 import { getDb } from "../lib/db";
 import { envelope } from "../lib/response";
+import { CATALOGUE, CATALOGUE_AS_OF } from "../lib/catalogue-facts";
 import { catalog } from "./catalog";
 import { variants } from "./variants";
 import { search } from "./search";
@@ -20,13 +21,26 @@ import { recordRestCall } from "../lib/usage";
 export const v1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Public — no key needed.
+// D-06 (owner, 2026-10-10). Ruta asta făcea `count(*)` peste `variants` la FIECARE
+// apel, neautentificat. `EXPLAIN (ANALYZE, BUFFERS)` pe `cars_prod`, 2026-10-10:
+// Index Only Scan, 11,09 ms, `shared hit=597` — tot din cache, zero citiri de disc.
+// Deci nu era un seq scan, iar costul era mic. Nu asta a decis schimbarea.
+//
+// A decis-o faptul că numărul se publica din DOUĂ surse: ruta asta din baza vie,
+// `src/mcp.ts` din `catalogue-facts.ts`. Exact dezacordul pentru care există acel
+// fișier — și era viu: MCP spunea 103.099, baza 103.372. O singură sursă îl închide
+// structural, nu îl micșorează.
+//
+// Verificarea de viață rămâne, dar atinge TABELA, nu doar conexiunea: un `SELECT 1`
+// gol trece și dacă `variants` e blocată sau coruptă — ar dovedi că socketul e
+// deschis, nu că datele se citesc.
 v1.get("/health", async (c) => {
   const sql = getDb(c.env);
-  const [{ count }] = await sql`SELECT count(*)::int FROM variants WHERE is_active`;
+  await sql`SELECT 1 FROM variants LIMIT 1`;
   return c.json(
     envelope(
-      { status: "ok", active_variants: count },
-      { last_synced_at: new Date().toISOString() },
+      { status: "ok", active_variants: CATALOGUE.variants },
+      { last_synced_at: new Date().toISOString(), catalogue_as_of: CATALOGUE_AS_OF },
     ),
   );
 });
