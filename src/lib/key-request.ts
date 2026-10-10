@@ -40,8 +40,21 @@
  *  sentence was a leftover from before the demo tier and survived T111, T167
  *  and T178. On 2026-10-08 twenty individual emails (D-05) promised the
  *  opposite in writing. The terms now say what this code does. Paired branch
- *  in v3: fix/t192-terms-mcp-no-key. */
-export const TOS_VERSION = "2026-10-10-v5";
+ *  in v3: fix/t192-terms-mcp-no-key.
+ *
+ *  2026-10-10-v6: the published text changed again — a new clause A13 in the
+ *  "Applies to both" section says where the Data ends and derived output
+ *  begins. Anything built from the Data that no longer contains it as data is
+ *  not the Data, provided it passes three tests that are all observable from
+ *  outside: a substantial part of the Compiled Database cannot be rebuilt from
+ *  what is published, it is not offered as a stand-in source of vehicle
+ *  specifications, and it carries the attribution A4 and B3 already require.
+ *  What passes all three may be published, commercially included, without the
+ *  B3 multiplier; what fails even one stays under B3 and B4. The tests are
+ *  external on purpose, the same lesson as v4: a condition we cannot observe
+ *  is not a condition. Nothing dropped in v4 comes back. 20 locales, one
+ *  commit. Paired branch in v3: fix/t199-derived-output. */
+export const TOS_VERSION = "2026-10-10-v6";
 
 /** "clearfly.co.uk" is a fine answer, so a missing scheme is added rather than
  *  refused. What must hold: http(s), a dotted hostname, nothing else. Returns
