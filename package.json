@@ -9,6 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint src",
+    "build:scripts": "tsc -p tsconfig.build-scripts.json && node -e \"require('fs').writeFileSync('.tsbuild/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\"",
+    "verify:catalogue": "npm run build:scripts && node scripts/verify-catalogue-facts.mjs --prod",
+    "verify:catalogue:local": "npm run build:scripts && node scripts/verify-catalogue-facts.mjs",
     "openapi:build": "node scripts/build-openapi-json.mjs",
     "openapi:check": "node scripts/build-openapi-json.mjs --check"
   },
