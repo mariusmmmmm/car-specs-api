@@ -104,9 +104,9 @@ absent from the published OpenAPI spec. The old `requests / approve / reject`
 review commands are gone: nothing creates a request record any more.
 Worker secrets for the flow: `ADMIN_TOKEN`, `BREVO_API_KEY`, `NOTIFY_TO`, `NOTIFY_FROM`.
 
-## Two tiers, and only two
+## Three ways in
 
-There is **no free tier**.
+There is **no free tier**. Two ways take a key; the third takes a payment.
 
 - **Demo** — self-serve, free, 40 cars (5 brands x 2 models x 2 generations x 2
   variants, all 10 fuel types) with every spec, every image and all 20
@@ -128,6 +128,13 @@ There is **no free tier**.
     subscription. Module list, prices and terms are published on
     <https://cars-data.com/en/api>; nothing is quoted here that is not on that
     page.
+
+- **Pay per request, x402 (T216)** — no key, no account. `GET /v1/variants/:id/specs`
+  ($0.05) and `GET /v1/search` ($0.005) answer a keyless caller `402` with the
+  price; an x402 client pays in USDC on Base and retries. Only a successful
+  response is settled. MCP has the same two as paid tools. **Off until
+  `X402_PAY_TO` is set** — see `src/lib/x402-config.ts`; unset, those routes
+  answer `401` like every other.
 
 ## Data & attribution
 

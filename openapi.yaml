@@ -17,11 +17,11 @@ info:
     vehicle catalogue (103,099 variants, 1,300+ models, 5,395 generations,
     224 spec types, 20 languages).
 
-    # Two tiers, and only two
+    # Three ways in
 
-    There is **no free tier**. Access to this API comes in exactly two shapes,
-    and the difference between them is not a quota — it is which data exists
-    behind the key.
+    There is **no free tier**. Access to this API comes in three shapes, and
+    the difference between them is not a quota — it is which data exists
+    behind the request. Two take a key; the third takes a payment instead.
 
     ## 1. Demo — self-serve, free, 40 cars
 
@@ -60,6 +60,29 @@ info:
 
     `GET /export` is **not** that export and never serves bulk data; it
     answers `403` with a pointer to the licensing page.
+
+    ## 3. Pay per request — x402, no key
+
+    Two endpoints answer a caller that sends **no key** with
+    `402 Payment Required` and the price, under the
+    [x402](https://x402.org) v2 protocol: `GET /variants/{id}/specs` — $0.05 —
+    and `GET /search` — $0.005. The `PAYMENT-REQUIRED` response header is
+    base64 JSON naming the scheme (`exact`), the network (Base,
+    `eip155:8453`), the asset (USDC), the amount in atomic units and the
+    recipient; the header, not this text, is what binds.
+
+    Pay with any x402 client, send the proof in `PAYMENT-SIGNATURE` and repeat
+    the request. You get the same `200` a key holder gets, plus a
+    `PAYMENT-RESPONSE` header carrying the settlement transaction — that
+    transaction is the receipt. **Only a successful response is settled**: a
+    `404` for an id that does not exist costs nothing.
+
+    No account, no key, no quota. A per-network limit of 60 requests a minute
+    protects the service and answers `429` above it. A request that DOES send
+    a key never gets a `402` — it is answered as a key holder, valid or not.
+    The MCP server offers the same two as paid tools, `search_catalogue` and
+    `get_specs_full`. Paying per request does not license harvesting: bulk
+    access is the licensed export (Terms, A3 and A5).
 
     # Conventions
 
@@ -532,17 +555,26 @@ paths:
       summary: Localized specs for one variant
       description: Spec values and units resolved into the requested language. In the demo tier this is answered from the blob, for the 40 cars, in all 20 languages.
       operationId: getVariantSpecs
+      # A key, or no key and an x402 payment (see "Pay per request" above).
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+        - {}
       parameters:
         - $ref: '#/components/parameters/VariantId'
         - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/PaymentSignature'
       responses:
         '200':
-          description: OK
+          description: OK. Paid with x402, it also carries `PAYMENT-RESPONSE`.
+          headers:
+            PAYMENT-RESPONSE: { $ref: '#/components/headers/PaymentResponse' }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariantSpecsEnvelope'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '403':
           description: On a demo key, this car is outside the demo set.
           $ref: '#/components/responses/Problem'
@@ -602,6 +634,11 @@ paths:
       summary: Typeahead search over variant names
       description: Trigram matching on brand, model and display name. In the demo tier this is a substring match over the 40 rows, in the Worker — there is no catalogue behind it to walk.
       operationId: searchVariants
+      # A key, or no key and an x402 payment (see "Pay per request" above).
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+        - {}
       parameters:
         - name: q
           in: query
@@ -611,9 +648,12 @@ paths:
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/PaymentSignature'
       responses:
         '200':
-          description: OK
+          description: OK. Paid with x402, it also carries `PAYMENT-RESPONSE`.
+          headers:
+            PAYMENT-RESPONSE: { $ref: '#/components/headers/PaymentResponse' }
           content:
             application/json:
               schema:
@@ -622,6 +662,7 @@ paths:
           description: Missing `q`.
           $ref: '#/components/responses/Problem'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -715,6 +756,15 @@ components:
         what most MCP clients send.
 
   parameters:
+    PaymentSignature:
+      name: PAYMENT-SIGNATURE
+      in: header
+      required: false
+      description: |
+        x402 v2 payment proof, base64 JSON, built by an x402 client from the
+        `PAYMENT-REQUIRED` header of a previous `402`. Only on the two paid
+        routes, and only without a key — a request with a key ignores it.
+      schema: { type: string }
     Locale:
       name: locale
       in: query
@@ -764,7 +814,32 @@ components:
       description: Canonical brand slug, e.g. `volkswagen`. Slugs are stable and public; only numeric ids are tokenised.
       schema: { type: string }
 
+  headers:
+    PaymentRequired:
+      description: |
+        x402 v2 payment requirements, base64 JSON: `x402Version`, `resource`
+        and `accepts[]`, each with `scheme`, `network`, `asset`, `amount`
+        (atomic units — USDC has 6 decimals, so $0.05 is `50000`), `payTo`
+        and `maxTimeoutSeconds`.
+      schema: { type: string }
+    PaymentResponse:
+      description: |
+        x402 v2 settlement result, base64 JSON: `success`, `transaction`,
+        `network` and `payer`. The transaction is the receipt.
+      schema: { type: string }
+
   responses:
+    PaymentRequired:
+      description: |
+        No key and no valid payment. The price and how to pay are in the
+        `PAYMENT-REQUIRED` header; the body says the same in words. A request
+        that sent a key never gets this — it gets `401`/`403` instead.
+      headers:
+        PAYMENT-REQUIRED: { $ref: '#/components/headers/PaymentRequired' }
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
     Problem:
       description: RFC 9457 problem document.
       content:
@@ -781,7 +856,8 @@ components:
       description: |
         No key, or a key we do not know. `WWW-Authenticate: Bearer` on the MCP
         surface. The MCP server needs no key at all; a REST demo key is one
-        click away.
+        click away. On the two x402 routes a request with no key gets `402`
+        instead, with the price.
       content:
         application/problem+json:
           schema:
