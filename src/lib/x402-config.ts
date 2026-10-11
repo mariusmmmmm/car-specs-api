@@ -19,6 +19,9 @@ const NETWORK_ALIASES: Record<string, string> = {
 /** Testnet by default: mainnet has to be asked for by name. */
 export const DEFAULT_NETWORK = "eip155:84532";
 export const DEFAULT_FACILITATOR_URL = "https://x402.org/facilitator";
+/** Networks the default facilitator may serve. Anything else is treated as a
+ *  mainnet that needs an explicit X402_FACILITATOR_URL. */
+const TESTNETS: ReadonlySet<string> = new Set(["eip155:84532"]);
 
 // The two prices, and why they are not the $0.001 the July plan (BIZ-L2d) had.
 //
@@ -84,7 +87,19 @@ export function parseX402Config(env: X402Env): X402ConfigResult {
     return { ok: false, reason: "invalid", detail: `X402_NETWORK ${rawNetwork} is not an eip155 network` };
   }
 
-  const facilitatorUrl = env.X402_FACILITATOR_URL?.trim() || DEFAULT_FACILITATOR_URL;
+  // T226: the default facilitator (x402.org) settles TESTNET only — measured on
+  // its /supported, 2026-10-11: eip155:84532, no eip155:8453. Mainnet with the
+  // default would boot "configured" and fail every payment. So a mainnet network
+  // needs a facilitator named on purpose, or x402 stays off.
+  const explicitFacilitator = env.X402_FACILITATOR_URL?.trim();
+  if (!TESTNETS.has(network) && !explicitFacilitator) {
+    return {
+      ok: false,
+      reason: "invalid",
+      detail: `X402_NETWORK ${network} is a mainnet; set X402_FACILITATOR_URL explicitly — the default ${DEFAULT_FACILITATOR_URL} settles testnet only`,
+    };
+  }
+  const facilitatorUrl = explicitFacilitator || DEFAULT_FACILITATOR_URL;
   if (!/^https:\/\/[^\s/]+/.test(facilitatorUrl)) {
     return { ok: false, reason: "invalid", detail: "X402_FACILITATOR_URL must be an https URL" };
   }

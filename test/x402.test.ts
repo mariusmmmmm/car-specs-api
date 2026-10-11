@@ -166,9 +166,13 @@ describe("config — the address is the switch", () => {
       return r.ok ? r.settings.network : r.reason;
     };
     expect(at(undefined)).toBe("eip155:84532");
-    expect(at("base")).toBe("eip155:8453");
+    // mainnet only with a facilitator named on purpose (T226)
+    expect(at("base")).toBe("invalid");
     expect(at("base-sepolia")).toBe("eip155:84532");
-    expect(at("eip155:8453")).toBe("eip155:8453");
+    expect(at("eip155:8453")).toBe("invalid");
+    const main = parseX402Config({ X402_PAY_TO: PAY_TO, X402_NETWORK: "base", X402_FACILITATOR_URL: "https://facilitator.payai.network" });
+    expect(main.ok && main.settings.network).toBe("eip155:8453");
+    expect(main.ok && main.settings.facilitatorUrl).toBe("https://facilitator.payai.network");
     expect(at("solana:mainnet")).toBe("invalid");
   });
 
