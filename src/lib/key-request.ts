@@ -53,8 +53,19 @@
  *  B3 multiplier; what fails even one stays under B3 and B4. The tests are
  *  external on purpose, the same lesson as v4: a condition we cannot observe
  *  is not a condition. Nothing dropped in v4 comes back. 20 locales, one
- *  commit. Paired branch in v3: fix/t199-derived-output. */
-export const TOS_VERSION = "2026-10-10-v6";
+ *  commit. Paired branch in v3: fix/t199-derived-output.
+ *
+ *  2026-10-11-v7: the published text changed again — clause A3 now says how
+ *  paying per request with x402 works, because THIS branch (T216) makes that a
+ *  way in: a keyless caller may pay for GET /v1/variants/:id/specs, GET
+ *  /v1/search and two MCP tools. Two sentences that would have turned false on
+ *  the day X402_PAY_TO is set were corrected with it — "the REST API requires a
+ *  key for every endpoint that returns Output" and "the MCP server serves Demo
+ *  Plan access to every caller". A5 gains that paying per request does not
+ *  license harvesting: bulk access is an export. The wording is conditional
+ *  ("where an endpoint offers it"), so it is true while x402 is off, as it is
+ *  when this deploys. Paired branch in v3: feat/t217-terms-x402. */
+export const TOS_VERSION = "2026-10-11-v7";
 
 /** "clearfly.co.uk" is a fine answer, so a missing scheme is added rather than
  *  refused. What must hold: http(s), a dotted hostname, nothing else. Returns
