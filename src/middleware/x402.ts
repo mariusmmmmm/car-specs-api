@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import { HTTPFacilitatorClient, x402ResourceServer, type FacilitatorClient, type RouteConfig } from "@x402/core/server";
 import type { PaymentPayload, PaymentRequirements, SupportedResponse } from "@x402/core/types";
-import { decodePaymentResponseHeader } from "@x402/core/http";
+import { decodePaymentRequiredHeader, decodePaymentResponseHeader } from "@x402/core/http";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { paymentMiddleware } from "@x402/hono";
 import type { Env, Variables } from "../types";
@@ -101,7 +101,18 @@ function routeConfig(s: X402Settings, route: { priceUsd: number; description: st
   };
 }
 
-function logOutcome(route: string, res: Response, priceUsd: number): void {
+/** The facilitator's reason, carried in the `error` field of PAYMENT-REQUIRED. */
+function refusalReason(res: Response): string | undefined {
+  const h = res.headers.get("PAYMENT-REQUIRED");
+  if (!h) return undefined;
+  try {
+    return decodePaymentRequiredHeader(h).error;
+  } catch {
+    return "undecodable";
+  }
+}
+
+function logOutcome(route: string, res: Response, priceUsd: number, paymentPresented: boolean): void {
   const header = res.headers.get("PAYMENT-RESPONSE");
   let tx: string | undefined;
   let payer: string | undefined;
@@ -117,13 +128,41 @@ function logOutcome(route: string, res: Response, priceUsd: number): void {
       tx = "undecodable";
     }
   }
+  // T226: a 402 that answers a request which CARRIED a payment is a refusal,
+  // not a challenge. Until T226 both were logged "402_issued", so on the day x402
+  // is switched on the first real payer to be turned away — wrong network, no
+  // funds, expired authorization — would have been invisible among the probes.
+  // Measured 2026-10-11 against the real x402.org facilitator: an unfunded
+  // payer logged "402_issued", indistinguishable from an agent that never paid.
   const outcome =
-    res.status === 402 ? (header ? "settle_failed" : "402_issued")
-    : res.status < 400 ? (tx ? "settled" : "served_unsettled")
-    : "error";
+    res.status === 402
+      ? header ? "settle_failed" : paymentPresented ? "verify_failed" : "402_issued"
+      : res.status < 400 ? (tx ? "settled" : "served_unsettled")
+      : "error";
+  const reason = outcome === "verify_failed" || outcome === "settle_failed" ? refusalReason(res) : undefined;
   // One line per paid-route request (BIZ-L2d §6). The on-chain tx is the
   // receipt; there is deliberately no accounting store beyond this.
-  console.log(JSON.stringify({ x402: outcome, route, status: res.status, price_usd: priceUsd, tx, payer, network }));
+  console.log(JSON.stringify({ x402: outcome, route, status: res.status, price_usd: priceUsd, reason, tx, payer, network }));
+}
+
+/** A refused payment came back with the body `{}` — the library builds the
+ *  refusal without our unpaidResponseBody. The reason IS in PAYMENT-REQUIRED,
+ *  but a client that only reads the body learned nothing. Say it in words,
+ *  keeping every header, and say plainly that nothing was taken. */
+async function explainRefusal(res: Response): Promise<Response> {
+  if (res.status !== 402 || !(res.headers.get("content-type") ?? "").includes("json")) return res;
+  const text = await res.clone().text();
+  if (text.trim() !== "{}") return res;
+  const reason = refusalReason(res) ?? "unknown";
+  const { body } = problem(
+    402,
+    "Payment Required",
+    `The payment was not accepted (${reason}). Nothing was charged. ` +
+      "The terms are in the PAYMENT-REQUIRED header — pay again against them, or send an API key.",
+  );
+  const headers = new Headers(res.headers);
+  headers.set("content-type", "application/problem+json");
+  return new Response(JSON.stringify(body), { status: 402, headers });
 }
 
 export async function x402Gate(c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) {
@@ -152,8 +191,13 @@ export async function x402Gate(c: Context<{ Bindings: Env; Variables: Variables 
   registerExactEvmScheme(server);
   const mw = paymentMiddleware(routeConfig(settings, route, c.req.url), server);
 
+  const paymentPresented = Boolean(c.req.header("payment-signature") || c.req.header("x-payment"));
   const returned = await mw(c, next);
-  const res = returned instanceof Response ? returned : c.res;
-  logOutcome(route.label, res, route.priceUsd);
-  return returned;
+  let res = returned instanceof Response ? returned : c.res;
+  if (paymentPresented) {
+    res = await explainRefusal(res);
+    c.res = res;
+  }
+  logOutcome(route.label, res, route.priceUsd, paymentPresented);
+  return paymentPresented ? res : returned;
 }

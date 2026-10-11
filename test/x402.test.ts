@@ -72,10 +72,13 @@ const ON = { X402_PAY_TO: PAY_TO, X402_FACILITATOR_URL: FACILITATOR };
 
 // ── facilitator stub ─────────────────────────────────────────────────────────
 const calls = { supported: 0, verify: 0, settle: 0 };
+/** T226: what the stubbed facilitator answers on /verify. */
+let verifyRefusal: string | null = null;
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   calls.supported = calls.verify = calls.settle = 0;
+  verifyRefusal = null;
   db.touched = 0;
   __resetX402Cache();
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -94,7 +97,11 @@ beforeEach(() => {
     }
     if (path.endsWith("/verify")) {
       calls.verify++;
-      return reply({ isValid: true, payer: "0x3333333333333333333333333333333333333333" });
+      return reply(
+        verifyRefusal
+          ? { isValid: false, invalidReason: verifyRefusal, payer: "0x3333333333333333333333333333333333333333" }
+          : { isValid: true, payer: "0x3333333333333333333333333333333333333333" },
+      );
     }
     if (path.endsWith("/settle")) {
       calls.settle++;
@@ -302,5 +309,71 @@ describe("REST — x402 ON", () => {
     let last = 0;
     for (let i = 0; i < 61; i++) last = (await get(path, e, { "cf-connecting-ip": "203.0.113.9" })).status;
     expect(last).toBe(429);
+  });
+});
+
+// ── T226 — a refused payment must be visible, to the caller and in the log ──
+describe("REST — a payment the facilitator REFUSES (T226)", () => {
+  // The exact reason the real x402.org facilitator gave an unfunded testnet
+  // payer on 2026-10-11, through `wrangler dev`.
+  const REASON = "invalid_exact_evm_insufficient_balance";
+
+  function captureLog() {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+      lines.push(a.map(String).join(" "));
+    });
+    return {
+      outcomes: () =>
+        lines.filter((l) => l.startsWith('{"x402"')).map((l) => JSON.parse(l) as Record<string, unknown>),
+      restore: () => spy.mockRestore(),
+    };
+  }
+
+  test("402 whose body says WHY, headers kept, nothing settled, logged verify_failed with the reason", async () => {
+    const e = env(ON);
+    const path = await specsPath();
+    const payment = await paymentFor(path, e);
+    verifyRefusal = REASON;
+    const log = captureLog();
+    const res = await get(path, e, { "PAYMENT-SIGNATURE": payment });
+    log.restore();
+
+    expect(res.status).toBe(402);
+    expect(calls.settle).toBe(0);
+    expect(res.headers.get("PAYMENT-REQUIRED")).not.toBeNull();
+    expect(decodePaymentRequiredHeader(res.headers.get("PAYMENT-REQUIRED")!).error).toBe(REASON);
+    const body = (await res.json()) as { status: number; detail: string };
+    expect(body.status).toBe(402);
+    expect(body.detail).toContain(REASON);
+    expect(body.detail).toContain("Nothing was charged");
+
+    const last = log.outcomes().at(-1)!;
+    expect(last.x402).toBe("verify_failed");
+    expect(last.reason).toBe(REASON);
+  });
+
+  test("an UNPAID request is still a challenge: 402_issued, our unpaid body, no reason", async () => {
+    const log = captureLog();
+    const res = await get(await specsPath(), env(ON));
+    log.restore();
+    expect(res.status).toBe(402);
+    expect(((await res.json()) as { detail: string }).detail).toContain("$0.05");
+    const last = log.outcomes().at(-1)!;
+    expect(last.x402).toBe("402_issued");
+    expect(last.reason).toBeUndefined();
+  });
+
+  test("an ACCEPTED payment is still logged settled with its tx", async () => {
+    const e = env(ON);
+    const path = await specsPath();
+    const payment = await paymentFor(path, e);
+    const log = captureLog();
+    const res = await get(path, e, { "PAYMENT-SIGNATURE": payment });
+    log.restore();
+    expect(res.status).toBe(200);
+    const last = log.outcomes().at(-1)!;
+    expect(last.x402).toBe("settled");
+    expect(last.tx).toBe("0xfeedbeef");
   });
 });
