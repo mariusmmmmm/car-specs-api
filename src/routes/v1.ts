@@ -14,6 +14,7 @@ import { docs } from "./docs";
 import { usage } from "./usage";
 import { exportRoute } from "./export";
 import { requireApiKey } from "../middleware/auth";
+import { x402Gate } from "../middleware/x402";
 import { opaqueIds } from "../middleware/opaque-ids";
 import { demo } from "./demo";
 import { recordRestCall } from "../lib/usage";
@@ -58,10 +59,15 @@ v1.route("/admin", admin);
 // reason; keep it there.
 v1.route("/", docs);
 
-// Everything below needs a key (demo or paid) and counts against quota. There
+// Everything below needs a key (demo or paid) and counts against quota — or,
+// on the routes lib/x402-config.ts names, an x402 payment instead (T216). There
 // is no free tier: the only self-serve key is the demo above, scoped to 40
-// cars; everything else is the Apify Actor or a licensed export.
+// cars; everything else is the Apify Actor, x402, or a licensed export.
 const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();
+// x402 (T216) BEFORE the key gate: a caller with no key, on a route the
+// allowlist in lib/x402-config.ts names, may pay per request instead. Inert
+// while X402_PAY_TO is unset — then this is a plain next().
+protectedV1.use("*", x402Gate);
 protectedV1.use("*", requireApiKey);
 
 // A demo key is answered entirely from the pre-rendered blob in KV and never
@@ -91,7 +97,7 @@ protectedV1.use("*", async (c, next) => {
     c.env,
     c.req.routePath,
     c.req.query("locale") ?? "-",
-    c.get("apiKeyRecord")?.plan ?? "-",
+    c.get("x402") ? "x402" : c.get("apiKeyRecord")?.plan ?? "-",
     (c.get("apiKeyHash") ?? "").slice(0, 8),
   );
 });

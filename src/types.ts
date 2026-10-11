@@ -26,6 +26,14 @@ export type Env = {
   // MissingIdSecret rather than minting tokens from a built-in default, which
   // would make every one of them guessable.
   ID_TOKEN_KEY?: string;
+  // T216: x402 v2 for callers without a key. ALL optional and all plain vars
+  // (an address and a price are not secrets). X402_PAY_TO is the switch:
+  // unset, or malformed, means x402 is off — see lib/x402-config.ts.
+  X402_PAY_TO?: string;
+  X402_NETWORK?: string;
+  X402_FACILITATOR_URL?: string;
+  X402_PRICE_SPECS_USD?: string;
+  X402_PRICE_SEARCH_USD?: string;
 };
 
 // Props carried from the /mcp entrypoint (index.ts) into the McpAgent Durable
@@ -50,4 +58,7 @@ export type McpProps = {
 export type Variables = {
   apiKeyHash: string;
   apiKeyRecord: KeyRecord;
+  /** Set by middleware/x402.ts when the payment middleware owns the request.
+   *  Downstream of it the payment has verified; there is no key. */
+  x402?: boolean;
 };

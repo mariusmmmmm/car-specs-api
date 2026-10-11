@@ -8,6 +8,11 @@ import { sourceFor, DEMO_UNSUPPORTED_FILTERS, type McpSource } from "./lib/mcp-s
 import { decodeId } from "./lib/public-id";
 import { encodeTree } from "./middleware/opaque-ids";
 import { CATALOGUE, n } from "./lib/catalogue-facts";
+import { withX402 } from "agents/x402";
+import { readX402Config, type X402Settings } from "./lib/x402-config";
+import { getDb } from "./lib/db";
+import { searchVariants } from "./lib/queries";
+import { localizeVariantSpecs } from "./lib/localize-variant";
 
 const localeSchema = z.enum(SUPPORTED_LOCALES).optional();
 
@@ -256,6 +261,77 @@ export class CarsDataMCP extends McpAgent<Env> {
         const id = await this.token("variant", variant_id);
         if (id === null) return json({ error: `No variant with id ${variant_id}` }, true);
         return json(await this.encode(await src.images(id)));
+      },
+    );
+
+    // Paid tools exist only when x402 is configured (T216). Unset X402_PAY_TO
+    // and this surface is byte-for-byte the demo one above.
+    const x402 = readX402Config(this.env);
+    if (x402) this.registerPaidTools(x402);
+  }
+
+  /** The full catalogue, per call, paid with x402 v2 (T216).
+   *
+   *  mcp-source.ts says MCP is the demo surface "always, for anyone", and that
+   *  a paid MCP would have to be "a deliberate construction, not a flag flip".
+   *  This is that construction, and it keeps the property sourceFor() was
+   *  protecting: the six tools above still never see a database connection.
+   *  Only these two do, and only inside the callback that withX402 runs AFTER
+   *  the facilitator verified the payment. There is no branch on a key, a plan
+   *  or a prop that could hand the database to an unpaid caller.
+   *
+   *  A callback that answers isError — unknown id, nothing found — is NOT
+   *  settled (agents/x402 skips settlement on a failed result), so a guessed
+   *  token costs the caller nothing. */
+  private registerPaidTools(s: X402Settings): void {
+    const paid = withX402(this.server, {
+      network: s.network,
+      recipient: s.payTo,
+      facilitator: { url: s.facilitatorUrl, timeoutMs: 15_000 },
+    });
+
+    paid.paidTool(
+      "search_catalogue",
+      `Search all ${n(CATALOGUE.variants)} variants (not only the 40-car demo). Returns opaque variant_ids for ` +
+        `get_specs_full. Paid per call with x402 (USDC) — $${s.searchPriceUsd}.`,
+      s.searchPriceUsd,
+      {
+        query: z.string().min(2).describe("e.g. 'bmw 3 series' or 'tesla model s'"),
+        locale: localeSchema,
+        limit: z.number().int().min(1).max(50).optional(),
+      },
+      { readOnlyHint: true, openWorldHint: false },
+      async ({ query, locale, limit }) => {
+        this.track("search_catalogue:paid", locale);
+        const rows = await searchVariants(getDb(this.env), resolveLocale(locale), query, limit ?? 10, 0);
+        if (rows.length === 0) return json({ error: `No variant matches "${query}"` }, true);
+        return json(await this.encode(rows));
+      },
+    );
+
+    paid.paidTool(
+      "get_specs_full",
+      `Full localized specs for ANY variant in the catalogue, in ${CATALOGUE.locales} languages. ` +
+        `Paid per call with x402 (USDC) — $${s.specsPriceUsd}. Not charged when the id is unknown.`,
+      s.specsPriceUsd,
+      {
+        variant_id: z.string().describe("opaque variant id from search_catalogue, e.g. v_1a2b3c4d"),
+        locale: localeSchema,
+      },
+      { readOnlyHint: true, openWorldHint: false },
+      async ({ variant_id, locale }) => {
+        this.track("get_specs_full:paid", locale);
+        const id = await this.token("variant", variant_id);
+        if (id === null) return json({ error: `No variant with id ${variant_id}` }, true);
+        const loc = resolveLocale(locale);
+        const result = await localizeVariantSpecs(getDb(this.env), loc, id);
+        if (!result) return json({ error: `No variant with id ${variant_id}` }, true);
+        return json({
+          variant_id,
+          locale: loc,
+          last_synced_at: result.last_synced_at.toISOString(),
+          specs: result.specs,
+        });
       },
     );
   }

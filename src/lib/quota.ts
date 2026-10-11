@@ -253,23 +253,49 @@ export const ALL_PLAN_QUOTAS = ALL_QUOTAS;
 // uncounted — the rule that T79 had to come back and fix.
 export const ANON_DEMO_PER_MINUTE = 20;
 
-export async function checkAnonDemoRate(
+export function checkAnonDemoRate(
   kv: KVNamespace,
   ipHash: string,
 ): Promise<{ ok: true } | { ok: false; reason: "rate" | "metering" }> {
-  const key = `anon:${ipHash}:${minuteBucket()}`;
+  return perMinute(kv, "anon", ipHash, ANON_DEMO_PER_MINUTE);
+}
+
+// ── x402, callers without a key (T216) ───────────────────────────────────────
+//
+// A paying caller has no key, so no per-key quota and no place in the global
+// catalogue ceiling — the payment is the meter, the same reason `apify` is
+// exempt. What a per-IP minute limit still protects is the database (Hyperdrive
+// role capped at 10 connections) and the facilitator, which every UNPAID
+// request would otherwise reach through the challenge path. 60/min is the
+// figure BIZ-L2d §5 set, and half of `apify`'s 120.
+export const X402_PER_MINUTE = 60;
+
+export function checkX402Rate(
+  kv: KVNamespace,
+  ipHash: string,
+): Promise<{ ok: true } | { ok: false; reason: "rate" | "metering" }> {
+  return perMinute(kv, "x402", ipHash, X402_PER_MINUTE);
+}
+
+async function perMinute(
+  kv: KVNamespace,
+  prefix: string,
+  ipHash: string,
+  limit: number,
+): Promise<{ ok: true } | { ok: false; reason: "rate" | "metering" }> {
+  const key = `${prefix}:${ipHash}:${minuteBucket()}`;
   let used: number;
   try {
     used = Number((await kv.get(key)) ?? 0);
   } catch (e) {
-    console.error("anon rate KV get failed — refusing:", e);
+    console.error(`${prefix} rate KV get failed — refusing:`, e);
     return { ok: false, reason: "metering" };
   }
-  if (used >= ANON_DEMO_PER_MINUTE) return { ok: false, reason: "rate" };
+  if (used >= limit) return { ok: false, reason: "rate" };
   try {
     await kv.put(key, String(used + 1), { expirationTtl: 70 });
   } catch (e) {
-    console.error("anon rate KV put failed — refusing:", e);
+    console.error(`${prefix} rate KV put failed — refusing:`, e);
     return { ok: false, reason: "metering" };
   }
   return { ok: true };

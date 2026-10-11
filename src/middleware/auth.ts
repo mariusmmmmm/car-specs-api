@@ -13,6 +13,10 @@ const TITLES = {
 } as const;
 
 export async function requireApiKey(c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) {
+  // A request paid with x402 (T216) carries no key by construction, and the
+  // flag is set only on the path where the payment middleware verified before
+  // calling next(). An unpaid request never gets here — it was answered 402.
+  if (c.get("x402")) return next();
   const auth = await authenticate(c.env, readApiKey(c.req.raw.headers));
   if (!auth.ok) {
     const { body, status, headers } = problem(auth.status, TITLES[auth.status], auth.detail);
