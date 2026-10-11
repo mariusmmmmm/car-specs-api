@@ -132,9 +132,10 @@ There is **no free tier**. Two ways take a key; the third takes a payment.
 - **Pay per request, x402 (T216)** — no key, no account. `GET /v1/variants/:id/specs`
   ($0.05) and `GET /v1/search` ($0.005) answer a keyless caller `402` with the
   price; an x402 client pays in USDC on Base and retries. Only a successful
-  response is settled. MCP has the same two as paid tools. **Off until
-  `X402_PAY_TO` is set** — see `src/lib/x402-config.ts`; unset, those routes
-  answer `401` like every other.
+  response is settled. MCP has the same two as paid tools. **Live on Base
+  mainnet since 2026-10-11 (T231)**, settled through the PayAI facilitator; the
+  switch is `X402_PAY_TO` in `wrangler.toml` — remove it and those routes
+  answer `401` like every other (`src/lib/x402-config.ts`).
 
 ## Data & attribution
 

@@ -20,12 +20,20 @@ compatibility_flags = ["nodejs_compat"]
 # owner's Coinbase Wallet (self-custody), read from the extension on 2026-10-11;
 # checksum form 0x3866d32426A12db52e155563768Bea9516BBAb49.
 #
-# TESTNET: no X402_NETWORK means Base Sepolia (eip155:84532) and the public
-# x402.org facilitator. Mainnet = X402_NETWORK = "base" AND an explicit
-# X402_FACILITATOR_URL — the default facilitator settles testnet only, and the
-# config refuses mainnet without one (T226).
+# MAINNET since T231 (owner, 2026-10-11: "hai pe mainnet cu PayAI"). Base
+# (eip155:8453), USDC 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913. The facilitator
+# is PayAI — x402.org settles testnet only, and the config refuses a mainnet
+# without an explicit X402_FACILITATOR_URL (T226). PayAI, read 2026-10-11 off
+# /supported and /pricing: v2 `exact` on eip155:8453, gas sponsored, free plan
+# = 1,000 settlements in total, then $0.001 credits per settlement (Base:
+# $0.00218) bought at merchant.payai.network with an API key — which this
+# Worker does NOT send yet. When the free plan runs out PayAI answers 403
+# `free_tier_exhausted`; the Worker then logs settle_failed with that reason
+# (T226) and serves nothing unpaid. Back to testnet: delete the two lines below.
 [vars]
 X402_PAY_TO = "0x3866d32426a12db52e155563768bea9516bbab49"
+X402_NETWORK = "base"
+X402_FACILITATOR_URL = "https://facilitator.payai.network"
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"

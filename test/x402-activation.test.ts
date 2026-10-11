@@ -21,11 +21,11 @@ describe("wrangler.toml activates x402 with a configuration the Worker accepts (
     expect(r).toMatchObject({ ok: true });
   });
 
-  test("it is the owner's address, on testnet, with the public facilitator", () => {
+  test("it is the owner's address, on Base MAINNET, through PayAI (T231)", () => {
     const r = parseX402Config(tomlVars());
     if (!r.ok) throw new Error("x402 config is off");
     expect(r.settings.payTo.toLowerCase()).toBe("0x3866d32426a12db52e155563768bea9516bbab49");
-    expect(r.settings.network).toBe("eip155:84532");
-    expect(r.settings.facilitatorUrl).toBe("https://x402.org/facilitator");
+    expect(r.settings.network).toBe("eip155:8453");
+    expect(r.settings.facilitatorUrl).toBe("https://facilitator.payai.network");
   });
 });
