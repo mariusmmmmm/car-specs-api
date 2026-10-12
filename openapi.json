@@ -591,9 +591,44 @@
         "type": "object"
       },
       "VariantSpecs": {
+        "description": "The resolved specs for one variant, plus the summary fields that identify it.\nThe summary exists so a client does not have to call the list endpoint just to\nlearn what car it is looking at; the same fields appear on `/compare`, which\nreuses this schema.\n",
         "properties": {
+          "accel_0_100_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "battery_kwh": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "brand_slug": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
           "locale": {
             "type": "string"
+          },
+          "model_slug": {
+            "type": "string"
+          },
+          "power_hp": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "price_new_eur": {
+            "description": "Null when the source carries 0, which means \"unknown\", not \"free\".",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "specs": {
             "additionalProperties": {
@@ -601,8 +636,32 @@
             },
             "type": "object"
           },
+          "top_speed_kmh": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "torque_nm": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "variant_id": {
             "type": "integer"
+          },
+          "year_from": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "year_to": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -781,7 +840,7 @@
     },
     "/export": {
       "get": {
-        "description": "Endpoint exists per the contract but is disabled/403 until L0 clean\nprovenance clears (see specs/plans/BIZ-L0-data-enrichment-clean-sourcing.md).\nDo not enable without a legal review pass beyond the Phase-1 ToS.\n",
+        "description": "Endpoint exists per the contract but is disabled/403 until L0 clean\nprovenance clears (see specs/evolution/BIZ-L0-data-enrichment-clean-sourcing.md).\nDo not enable without a legal review pass beyond the Phase-1 ToS.\n",
         "operationId": "exportVariants",
         "parameters": [
           {

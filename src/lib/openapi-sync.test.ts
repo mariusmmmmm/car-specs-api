@@ -50,3 +50,32 @@ describe("the docs routes answer", () => {
     expect(html).toContain('data-url="/v1/openapi.json"');
   });
 });
+
+/**
+ * T264. Testul de mai sus compară CĂILE din openapi.yaml cu cele din openapi.json.
+ * Nu compară niciodată CÂMPURILE unui răspuns cu ce întoarce codul — iar exact acolo
+ * s-a rupt contractul: `localizeVariantSpecs` a căpătat un `summary` de unsprezece
+ * câmpuri, împrăștiat în răspunsurile `/variants/{id}/specs`, `/compare` și ale celor
+ * două unelte MCP, în timp ce schema `VariantSpecs` rămăsese la trei câmpuri. Codul a
+ * stat necomis opt zile, trecea `tsc` și toate testele, și nimic nu spunea că API-ul
+ * ar fi răspuns altceva decât promitea specul lui publicat.
+ *
+ * Garda e textuală, ca şi cea de deasupra: citeşte lista de chei din sursă, nu rulează
+ * interogarea. Un câmp adăugat în `summary` fără să ajungă în schemă înroşeşte suita.
+ */
+describe("the summary fields the code returns are the ones the spec promises", () => {
+  test("every key of localizeVariantSpecs().summary is in the VariantSpecs schema", async () => {
+    const src = (await import("./localize-variant.ts?raw")).default as string;
+    const block = src.match(/summary:\s*\{([\s\S]*?)\n\s*\},/);
+    expect(block, "n-am găsit blocul `summary: {` în localize-variant.ts — s-a redenumit?").toBeTruthy();
+
+    const keys = [...block![1].matchAll(/^\s*([a-z_0-9]+)\s*:/gm)].map((m) => m[1]);
+    expect(keys.length, "zero chei extrase — regexul s-a rupt, nu codul").toBeGreaterThan(5);
+
+    const props = Object.keys(
+      (spec as { components: { schemas: { VariantSpecs: { properties: Record<string, unknown> } } } })
+        .components.schemas.VariantSpecs.properties,
+    );
+    expect(keys.filter((k) => !props.includes(k)), "câmpuri întoarse de cod, absente din schemă").toEqual([]);
+  });
+});

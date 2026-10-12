@@ -58,7 +58,7 @@ export class CarsDataMCP extends McpAgent<Env> {
       "get_specs",
       {
         description:
-          "Full localized specs for one vehicle variant, in any of 19 languages — 180 spec types covering engine & fuel, performance, EV/hybrid, safety (30 specs), comfort & interior (47), exterior, chassis, dimensions & weights, consumption (WLTP/NEDC). Each spec carries a confidence score; the response carries last_synced_at — surface both so you don't overstate certainty.",
+          "Full localized specs for one vehicle variant, in any of 19 languages — 180 spec types covering engine & fuel, performance, EV/hybrid, safety (30 specs), comfort & interior (47), exterior, chassis, dimensions & weights, consumption (WLTP/NEDC). Each spec carries a confidence score; the response carries last_synced_at — surface both so you don't overstate certainty. The response also carries the variant's summary (display_name, brand_slug, model_slug, year_from/to, power_hp, battery_kwh, top_speed_kmh, torque_nm, accel_0_100_s, price_new_eur), so you don't need a second call to say which car this is.",
         inputSchema: {
           variant_id: z.number().int().describe("from search_cars or filter_cars"),
           locale: localeSchema,
@@ -83,7 +83,8 @@ export class CarsDataMCP extends McpAgent<Env> {
     this.server.registerTool(
       "compare_variants",
       {
-        description: "Side-by-side localized specs for 2-4 vehicle variants.",
+        description:
+          "Side-by-side localized specs for 2-4 vehicle variants. Each entry carries the variant's summary (display_name, brand_slug, model_slug, year_from/to, power_hp, battery_kwh, top_speed_kmh, torque_nm, accel_0_100_s, price_new_eur) next to its specs, so a comparison can be labelled without a second call.",
         inputSchema: {
           variant_ids: z.array(z.number().int()).min(2).max(4),
           locale: localeSchema,

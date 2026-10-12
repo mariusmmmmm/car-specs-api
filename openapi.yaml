@@ -365,7 +365,7 @@ paths:
       summary: Bulk/delta export (cursor-paginated) — GATED, disabled in Phase 1
       description: |
         Endpoint exists per the contract but is disabled/403 until L0 clean
-        provenance clears (see specs/plans/BIZ-L0-data-enrichment-clean-sourcing.md).
+        provenance clears (see specs/evolution/BIZ-L0-data-enrichment-clean-sourcing.md).
         Do not enable without a legal review pass beyond the Phase-1 ToS.
       operationId: exportVariants
       x-phase1-gated: true
@@ -534,9 +534,27 @@ components:
 
     VariantSpecs:
       type: object
+      description: |
+        The resolved specs for one variant, plus the summary fields that identify it.
+        The summary exists so a client does not have to call the list endpoint just to
+        learn what car it is looking at; the same fields appear on `/compare`, which
+        reuses this schema.
       properties:
         variant_id: { type: integer }
         locale: { type: string }
+        display_name: { type: string }
+        brand_slug: { type: string }
+        model_slug: { type: string }
+        year_from: { type: [integer, "null"] }
+        year_to: { type: [integer, "null"] }
+        power_hp: { type: [integer, "null"] }
+        battery_kwh: { type: [number, "null"] }
+        top_speed_kmh: { type: [integer, "null"] }
+        torque_nm: { type: [integer, "null"] }
+        accel_0_100_s: { type: [number, "null"] }
+        price_new_eur:
+          type: [integer, "null"]
+          description: Null when the source carries 0, which means "unknown", not "free".
         specs:
           type: object
           additionalProperties:
