@@ -5,10 +5,33 @@ by extension, the directories that mirror it — Smithery, Glama, PulseMCP,
 mcp.so). This is how humans/agents *discover* the server and then connect it —
 models do not auto-discover MCP endpoints from the open web.
 
-The manifest is [`server.json`](./server.json) (validated against the official
-`2025-12-11` schema). Everything below the "OWNER STEPS" line needs the owner's
-GitHub/DNS credentials, so it can't be run by an agent — the files are ready;
-these are the clicks.
+The manifest is [`server.json`](./server.json). **It is generated, not edited** —
+`src/lib/server-manifest.ts` is the source, `npm run server:build` writes the file,
+and `test/server-json.test.ts` fails the suite if the two disagree or if the
+registry would refuse the result.
+
+> **Publish from the branch that is LIVE, and only after `npm run server:check`.**
+> `server.json` differs between branches. On 2026-10-12 the main checkout sat on
+> `feat/t29-api-docs` carrying **1.0.2** — publishing from there re-uploads the
+> manifest that declares a key mandatory, which is the whole defect this file is
+> about. `npm run server:check` is what stands between you and that mistake.
+
+### What actually blocked 1.0.3 for eight days (T251, 2026-10-12)
+
+This section used to say the publish needed credentials an agent could not have.
+That was wrong, and the wrongness cost the listing eight days.
+
+The credentials were already in place — the `v=MCPv1` TXT record has been on the
+apex since July, `mcp-registry-key.pem` is in `.secrets/`, `mcp-publisher` is
+installed, and **1.0.2 was published on 2026-10-04 from exactly that setup.**
+
+The real blocker was the schema: `description` has a `maxLength` of **100**, and
+the 1.0.3 draft was **106** characters. The registry would have refused it. A
+schema violation was filed as a credentials problem, so nobody re-ran it — and
+every mirror went on telling agents a manually-reviewed key was mandatory.
+
+Both failure modes are now tests, not surprises, and the length check runs again
+inside `build-server-json.mjs` immediately before a publish.
 
 ## Prerequisites (do these first)
 1. **Deploy the promo page first.** `server.json`'s `websiteUrl` points at
@@ -71,9 +94,13 @@ mcp-publisher login github     # opens a device-code login for the mariusmmmmm a
 
 ### 3. Publish
 ```bash
-cd api
+npm run server:check           # REFUSES a stale or over-length manifest. Not optional.
 mcp-publisher publish          # reads ./server.json, prints the stored metadata on success
 ```
+A version number is spent the moment the registry accepts it and can never be
+reused, so the check comes first. Versions served so far: 1.0.0, 1.0.1, 1.0.2.
+**1.0.3 is burned deliberately** — it exists in git, with different content, and
+was never published; 1.0.4 is the next number.
 Verify it's live:
 ```bash
 curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=cars-data" | jq .
@@ -96,8 +123,11 @@ curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=cars-data" |
   version, description, etc.).
 
 ## Keeping metadata in sync
-- Coverage numbers in `server.json`/`README.md` mirror the site
-  (`cars-data.com/llms.txt`: 102,191 variants / 116 brands / 19 languages).
+- Coverage numbers come from `src/lib/catalogue-facts.ts` and nowhere else —
+  that is why `server.json` is generated. Do not copy a number out of
+  `llms.txt`, the README or this file; all three have been stale before. The
+  figures are true only after `npm run verify:catalogue` (which reads
+  `cars_prod`, not the local replica) passes.
 - The rate limits shown here and on the promo page must match
   `src/lib/quota.ts`: **20/min** for the anonymous no-key MCP demo
   (`ANON_DEMO_PER_MINUTE`) and **10/min** for an issued demo key

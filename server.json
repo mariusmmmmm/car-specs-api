@@ -2,14 +2,14 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.cars-data/car-specs-api",
   "title": "cars-data.com — Car Specs API",
-  "description": "Search, compare & filter 103,099 car variants — 224 specs, 20 languages, EV data. Free demo without a key.",
+  "description": "Search, compare & filter 103,372 car variants — 224 specs, 20 languages. Free demo, no key; x402.",
   "status": "active",
   "repository": {
     "url": "https://github.com/mariusmmmmm/car-specs-api",
     "source": "github"
   },
   "websiteUrl": "https://cars-data.com/en/api/for-ai-agents",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "remotes": [
     {
       "type": "streamable-http",
@@ -17,7 +17,7 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <your cars-data.com API key> — OPTIONAL. Without it the server answers a fixed 40-car demo (every spec, every photo, 20 languages). A demo key, issued in one click, covers the same 40 cars over REST: https://cars-data.com/en/api/for-ai-agents",
+          "description": "Bearer <your cars-data.com API key> — OPTIONAL. Without it this server answers a fixed 40-car demo (every spec, every photo, 20 languages); a demo key, issued in one click, covers the same 40 cars over REST. Two tools reach the full 103,372-variant catalogue with no key and no account at all, paid per call under x402 v2 on Base (USDC): search_catalogue $0.005 and get_specs_full $0.05. Keys and licensed exports: https://cars-data.com/en/api/for-ai-agents",
           "isRequired": false,
           "isSecret": true
         }
