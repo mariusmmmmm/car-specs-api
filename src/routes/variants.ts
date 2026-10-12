@@ -119,7 +119,7 @@ variants.get("/:id/specs", async (c) => {
   }
   return c.json(
     envelope(
-      { variant_id: id, locale, specs: result.specs },
+      { variant_id: id, locale, ...result.summary, specs: result.specs },
       { locale, last_synced_at: result.last_synced_at.toISOString() },
     ),
   );

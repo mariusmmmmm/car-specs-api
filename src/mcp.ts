@@ -73,6 +73,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         return json({
           variant_id,
           locale: loc,
+          ...result.summary,
           last_synced_at: result.last_synced_at.toISOString(),
           specs: result.specs,
         });
@@ -97,7 +98,7 @@ export class CarsDataMCP extends McpAgent<Env> {
         if (missing.length > 0) return json({ error: `No variant(s) with id ${missing.join(", ")}` }, true);
         return json({
           locale: loc,
-          data: variant_ids.map((id, i) => ({ variant_id: id, specs: results[i]!.specs })),
+          data: variant_ids.map((id, i) => ({ variant_id: id, ...results[i]!.summary, specs: results[i]!.specs })),
         });
       },
     );

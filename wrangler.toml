@@ -39,8 +39,9 @@ new_sqlite_classes = ["CarsDataMCP"]
 # Usage observability (BIZ-D7 §5): one custom datapoint per MCP tool call, REST
 # request and anon-429, queried via the Analytics Engine SQL API by
 # scripts/usage-report.mjs. Datapoints are tiny (5 blobs + 1 double vs the
-# 20-blob/16 KB cap); 3-month retention. Available on Workers Paid (this account
-# already runs Hyperdrive + a Durable Object).
+# 20-blob/16 KB cap); 3-month retention. Account is on Workers Paid since
+# 2026-07-27 (upgraded from Free after the KV free-tier 1000 puts/day cap caused
+# a metering outage — see BIZ-AUDIT §incident). Paid lifts KV to 1M puts/day.
 [[analytics_engine_datasets]]
 binding = "USAGE"
 dataset = "cars_data_api_usage"
