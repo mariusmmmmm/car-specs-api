@@ -69,21 +69,32 @@ brew install mcp-publisher     # or: download the latest release binary from
 
 ### 2. Authenticate — pick ONE namespace
 
-**Option A (recommended) — domain namespace `com.cars-data/*`** (branded; matches
-`server.json` as written). Proves you own cars-data.com via a DNS TXT record:
-```bash
-# generate an ed25519 keypair
-openssl genpkey -algorithm Ed25519 -out mcp-registry-key.pem
+**Option A — domain namespace `com.cars-data/*`.** This is what we use, and it
+is **already set up**: the keypair is `.secrets/mcp-registry-key.pem` and its
+TXT record has been on the apex since July. Nothing below needs redoing.
 
-# print the TXT record value to add
-echo "v=MCPv1; k=ed25519; p=$(openssl pkey -in mcp-registry-key.pem -pubout -outform DER | tail -c 32 | base64)"
-```
-Add that as a **TXT record on `cars-data.com`** (Cloudflare DNS → apex `@`),
-wait for propagation (`dig +short TXT cars-data.com` shows it), then:
 ```bash
-mcp-publisher login dns --domain cars-data.com --private-key-file mcp-registry-key.pem
+KEY=../.secrets/mcp-registry-key.pem     # from api/ or any api-wt-* worktree
+
+# Confirm the key on disk is the one the apex publishes, BEFORE trusting a login.
+# These two must be byte-identical:
+openssl pkey -in "$KEY" -pubout -outform DER | tail -c 32 | base64
+dig +short TXT cars-data.com | tr -d '"' | grep v=MCPv1 | sed 's/.*p=//'
+
+mcp-publisher login dns --domain cars-data.com \
+  --private-key "$(openssl pkey -in "$KEY" -outform DER | tail -c 32 | xxd -p -c 64)"
 ```
-Keep `mcp-registry-key.pem` out of git (it's the publish credential).
+
+> **`--private-key` takes the 32-byte seed as hex, not a path.** This file said
+> `--private-key-file <path>` until 2026-10-12; that flag does not exist in the
+> installed CLI, which rejects it with `flag provided but not defined`. If you
+> hit that, the command is stale, not your key.
+
+Only if the key is ever lost: `openssl genpkey -algorithm Ed25519 -out
+mcp-registry-key.pem`, publish `v=MCPv1; k=ed25519; p=<pubkey base64>` as a TXT
+record on the apex (Cloudflare DNS → `@`), wait for `dig +short TXT
+cars-data.com` to show it, then log in as above. The key is the publish
+credential — it stays in `.secrets/`, which is gitignored.
 
 **Option B (fastest fallback) — GitHub namespace.** If you'd rather skip DNS,
 change `server.json`'s `name` to `io.github.mariusmmmmm/car-specs-api` (the repo
