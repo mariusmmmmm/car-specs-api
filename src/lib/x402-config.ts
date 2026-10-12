@@ -143,7 +143,17 @@ export function paidRoute(
   path: string,
   s: X402Settings,
 ): { label: string; priceUsd: number; description: string } | null {
-  if (method !== "GET") return null;
+  // T237 — HEAD se tratează ca GET AICI, deliberat.
+  // RFC 9110: răspunsul la HEAD trebuie să poarte ACELEAȘI antete ca al unui GET.
+  // Până pe 2026-10-12, `method !== "GET"` scotea HEAD din rutele plătite, deci
+  // cererea cădea pe requireApiKey și primea 401 — un client care sondează cu
+  // HEAD afla „n-ai voie", nu „se poate plăti", și nu vedea niciodată
+  // PAYMENT-REQUIRED. Măsurat pe producţie: HEAD 401 / GET 402 pe ambele rute
+  // plătite, iar pe /v1/brands (neplătită) 401 pe amândouă — deci era specific
+  // porții x402, nu o regulă generală de metodă.
+  // Cumpărarea propriu-zisă rămâne interzisă pe HEAD: vezi x402Gate, care nu
+  // lasă HEAD să ajungă la handler, deci decontarea e anulată de @x402/hono.
+  if (method !== "GET" && method !== "HEAD") return null;
   if (/^(?:\/v1)?\/variants\/[^/]+\/specs\/?$/.test(path)) {
     return {
       label: "/v1/variants/:id/specs",

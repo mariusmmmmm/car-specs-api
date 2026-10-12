@@ -192,7 +192,34 @@ export async function x402Gate(c: Context<{ Bindings: Env; Variables: Variables 
   const mw = paymentMiddleware(routeConfig(settings, route, c.req.url), server);
 
   const paymentPresented = Boolean(c.req.header("payment-signature") || c.req.header("x-payment"));
-  const returned = await mw(c, next);
+
+  // T237 — HEAD ANUNȚĂ prețul, dar nu cumpără niciodată.
+  //
+  // Hono servește HEAD din handlerul de GET (verificat: HEAD /v1/openapi.json → 200),
+  // deci dacă HEAD ar trece mai departe, o plată prezentată pe HEAD s-ar deconta
+  // și ar întoarce un răspuns FĂRĂ CORP: clientul plătit, nimic livrat. Corpul e
+  // exact lucrul pentru care se plătește.
+  //
+  // Un HEAD NEplătit nu ajunge aici — middleware-ul răspunde 402 cu
+  // PAYMENT-REQUIRED înainte de `next`, adică exact antetele pe care le-ar da un
+  // GET neplătit. Asta E reparația.
+  //
+  // Un HEAD CU plată ajunge, și primește 405. Nu e o a doua formulare a refuzului:
+  // un răspuns ≥400 face @x402/hono să ANULEZE decontarea — aceeași regulă pe care
+  // se bazează deja comentariul de la începutul fișierului. Deci plata e
+  // verificată și apoi explicit NEluată.
+  const headNever: Next = async () => {
+    const { body, status, headers } = problem(
+      405,
+      "Method Not Allowed",
+      "HEAD advertises the price of this route but never serves it, and never charges for it — " +
+        "the response has no body by definition. Repeat the request as GET, paying against the " +
+        "PAYMENT-REQUIRED header. Nothing was charged.",
+    );
+    c.res = c.json(body, status, { ...headers, Allow: "GET" });
+  };
+
+  const returned = await mw(c, c.req.method === "HEAD" ? headNever : next);
   let res = returned instanceof Response ? returned : c.res;
   if (paymentPresented) {
     res = await explainRefusal(res);

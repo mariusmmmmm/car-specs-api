@@ -196,7 +196,11 @@ describe("allowlist — only named routes are for sale", () => {
   test.each([
     ["GET", "/v1/variants/v_1a2b3c4d/specs", true],
     ["GET", "/v1/search", true],
+    // T237 — HEAD e pe listă ca să poată primi provocarea, nu ca să cumpere.
+    ["HEAD", "/v1/variants/v_1a2b3c4d/specs", true],
+    ["HEAD", "/v1/search", true],
     ["POST", "/v1/search", false],
+    ["OPTIONS", "/v1/search", false],
     ["GET", "/v1/variants/v_1a2b3c4d", false],
     ["GET", "/v1/variants/v_1a2b3c4d/images", false],
     ["GET", "/v1/variants", false],
@@ -379,5 +383,71 @@ describe("REST — a payment the facilitator REFUSES (T226)", () => {
     const last = log.outcomes().at(-1)!;
     expect(last.x402).toBe("settled");
     expect(last.tx).toBe("0xfeedbeef");
+  });
+});
+
+// T237 — HEAD anunță prețul, dar nu cumpără niciodată.
+//
+// Măsurat pe producţie 2026-10-12, înainte de reparaţie:
+//   HEAD /v1/variants/:id/specs → 401     GET … → 402
+//   HEAD /v1/search             → 401     GET … → 402
+//   HEAD /v1/brands             → 401     GET … → 401   (rută neplătită: corect)
+// Deci era specific porţii x402, nu o regulă generală de metodă: un client care
+// sondează cu HEAD afla „n-ai voie", nu „se poate plăti", şi nu vedea niciodată
+// antetul PAYMENT-REQUIRED. RFC 9110 cere ca HEAD să poarte aceleaşi antete ca GET.
+describe("T237 — HEAD vede preţul, dar nu cumpără", () => {
+  const head = (path: string, e: unknown, headers: Record<string, string> = {}) =>
+    app.fetch(new Request(`https://api.test${path}`, { method: "HEAD", headers }), e as never);
+
+  test("HEAD neplătit pe o rută plătită → 402, cu EXACT antetul pe care îl dă GET", async () => {
+    const e = env(ON);
+    const path = await specsPath();
+    const h = await head(path, e);
+    const g = await get(path, e);
+
+    expect(h.status).toBe(402);
+    expect(g.status).toBe(402);
+    const hp = h.headers.get("PAYMENT-REQUIRED");
+    expect(hp).toBeTruthy();
+
+    // nu doar „există un antet" — aceleaşi condiţii de plată.
+    const a = decodePaymentRequiredHeader(hp!).accepts[0]!;
+    const b = decodePaymentRequiredHeader(g.headers.get("PAYMENT-REQUIRED")!).accepts[0]!;
+    expect(a.payTo).toBe(b.payTo);
+    expect(a.network).toBe(b.network);
+    expect(a.amount).toBe(b.amount);
+  });
+
+  test("HEAD pe o rută NEplătită rămâne 401 — reparaţia nu deschide alte uşi", async () => {
+    const e = env(ON);
+    const r = await head("/v1/brands", e);
+    expect(r.status).toBe(401);
+    expect(r.headers.get("PAYMENT-REQUIRED")).toBeNull();
+  });
+
+  test("HEAD CU plată → 405, şi NIMIC nu se decontează", async () => {
+    const e = env(ON);
+    const path = await specsPath();
+    const payment = await paymentFor(path, e);
+    db.touched = 0;
+
+    const r = await head(path, e, { "PAYMENT-SIGNATURE": payment });
+
+    expect(r.status).toBe(405);
+    expect(r.headers.get("Allow")).toBe("GET");
+    // dovada că nu s-a luat nimic: fără chitanţă, şi fără atingerea bazei.
+    expect(r.headers.get("PAYMENT-RESPONSE")).toBeNull();
+    expect(db.touched).toBe(0);
+  });
+
+  test("GET cu aceeaşi plată CHIAR se decontează — 405-ul de mai sus e despre HEAD, nu despre plată", async () => {
+    const e = env(ON);
+    const path = await specsPath();
+    const payment = await paymentFor(path, e);
+
+    const r = await get(path, e, { "PAYMENT-SIGNATURE": payment });
+
+    expect(r.status).toBe(200);
+    expect(r.headers.get("PAYMENT-RESPONSE")).toBeTruthy();
   });
 });
