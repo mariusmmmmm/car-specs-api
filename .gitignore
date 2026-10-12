@@ -5,3 +5,9 @@ dist/
 .dev.vars
 *.log
 .mcp-registry-auth/
+
+# Chei private (adăugat 2026-10-03). mcp-registry-key.pem stătea aici
+# neurmărit dar NEignorat: un `git add .` l-ar fi comis.
+*.pem
+*.key
+.DS_Store
