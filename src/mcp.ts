@@ -329,6 +329,14 @@ export class CarsDataMCP extends McpAgent<Env> {
         return json({
           variant_id,
           locale: loc,
+          // Sumarul variantei (T264). Aici se poate, fiindcă `get_specs_full`
+          // cheamă `localizeVariantSpecs` DIRECT. `get_specs` şi
+          // `compare_variants` trec prin `McpSource`, al cărui `SpecsResult`
+          // n-are `summary`, iar implementarea lui demo construieşte dintr-un
+          // blob îngheţat fără brand_slug / year_from / top_speed / torque /
+          // accel. Alinierea lor cere regenerat blobul — task separat, nu
+          // strecurat într-o livrare de contract.
+          ...result.summary,
           last_synced_at: result.last_synced_at.toISOString(),
           specs: result.specs,
         });

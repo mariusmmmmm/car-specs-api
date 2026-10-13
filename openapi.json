@@ -955,9 +955,44 @@
         "type": "object"
       },
       "VariantSpecs": {
+        "description": "Specurile rezolvate ale unei variante, plus câmpurile de sumar care o\nidentifică. Sumarul există ca un client să nu fie nevoit să cheme endpointul\nde listă doar ca să afle ce mașină citește. Aceleași câmpuri apar pe\n`/compare`, care reutilizează schema asta.\n",
         "properties": {
+          "accel_0_100_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "battery_kwh": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "brand_slug": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
           "locale": {
             "type": "string"
+          },
+          "model_slug": {
+            "type": "string"
+          },
+          "power_hp": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "price_new_eur": {
+            "description": "Null când sursa poartă 0, ceea ce înseamnă „necunoscut\", nu „gratis\".",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "specs": {
             "additionalProperties": {
@@ -965,9 +1000,33 @@
             },
             "type": "object"
           },
+          "top_speed_kmh": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "torque_nm": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "variant_id": {
             "example": "v_1a2b3c4d",
             "type": "string"
+          },
+          "year_from": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "year_to": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "type": "object"

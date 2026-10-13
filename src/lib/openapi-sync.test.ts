@@ -208,3 +208,46 @@ describe("the spec tells the truth about the two tiers", () => {
     expect(quoted.filter((q) => !PUBLISHED_ON_EN_API.has(q)), "a price that is not on https://cars-data.com/en/api").toEqual([]);
   });
 });
+
+/**
+ * T264 — câmpurile pe care codul le ÎNTOARCE vs cele pe care specul le PROMITE.
+ *
+ * Testele de mai sus compară CĂILE: ce rute montează Worker-ul vs ce rute descrie
+ * specul, în ambele direcții. Niciunul nu compară CÂMPURILE unui răspuns — iar exact
+ * acolo s-a rupt contractul: `localizeVariantSpecs` a căpătat un `summary` de
+ * unsprezece câmpuri, împrăștiat în `/v1/variants/{id}/specs`, în `/v1/compare` și în
+ * unealta plătită `get_specs_full`, în timp ce schema `VariantSpecs` rămăsese la trei.
+ *
+ * Garda e textuală, ca și cea de sus: citește lista de chei din sursă, nu rulează
+ * interogarea. Un câmp adăugat în `summary` fără să ajungă în schemă înroșește suita.
+ */
+describe("the summary fields the code returns are the ones the spec promises", () => {
+  test("every key of localizeVariantSpecs().summary is in the VariantSpecs schema", async () => {
+    const src = (await import("./localize-variant.ts?raw")).default as string;
+    const block = src.match(/summary:\s*\{([\s\S]*?)\n\s*\},/);
+    expect(block, "n-am găsit blocul `summary: {` în localize-variant.ts — s-a redenumit?").toBeTruthy();
+
+    const keys = [...block![1].matchAll(/^\s*([a-z_0-9]+)\s*:/gm)].map((m) => m[1]);
+    expect(keys.length, "zero chei extrase — regexul s-a rupt, nu codul").toBeGreaterThan(5);
+
+    const props = Object.keys(
+      (spec as { components: { schemas: { VariantSpecs: { properties: Record<string, unknown> } } } })
+        .components.schemas.VariantSpecs.properties,
+    );
+    expect(keys.filter((k) => !props.includes(k)), "câmpuri întoarse de cod, absente din schemă").toEqual([]);
+  });
+
+  test("variant_id stays an opaque token in the schema, not an integer", () => {
+    // T219 a corectat exact asta: id-urile sunt token-uri opace `v_…` de la T111.
+    // Prima versiune a lui T264 a fost construită pe `feat/t29-api-docs`, unde
+    // câmpul era încă `integer` — iar rescrierea întregii scheme l-ar fi adus înapoi.
+    // Cast prin `unknown`: câmpurile nullable poartă `type: [tip, "null"]`, deci
+    // proprietățile schemei NU sunt uniform `{ type?: string }`. Prima formă a
+    // testului presupunea că sunt, iar `tsc` a respins-o — exact poarta care
+    // trebuia să o respingă.
+    const props = (spec as unknown as {
+      components: { schemas: { VariantSpecs: { properties: Record<string, { type?: unknown }> } } };
+    }).components.schemas.VariantSpecs.properties;
+    expect(props.variant_id.type).toBe("string");
+  });
+});

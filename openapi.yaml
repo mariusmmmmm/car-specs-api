@@ -1091,9 +1091,27 @@ components:
 
     VariantSpecs:
       type: object
+      description: |
+        Specurile rezolvate ale unei variante, plus câmpurile de sumar care o
+        identifică. Sumarul există ca un client să nu fie nevoit să cheme endpointul
+        de listă doar ca să afle ce mașină citește. Aceleași câmpuri apar pe
+        `/compare`, care reutilizează schema asta.
       properties:
         variant_id: { type: string, example: "v_1a2b3c4d" }
         locale: { type: string }
+        display_name: { type: string }
+        brand_slug: { type: string }
+        model_slug: { type: string }
+        year_from: { type: [integer, "null"] }
+        year_to: { type: [integer, "null"] }
+        power_hp: { type: [integer, "null"] }
+        battery_kwh: { type: [number, "null"] }
+        top_speed_kmh: { type: [integer, "null"] }
+        torque_nm: { type: [integer, "null"] }
+        accel_0_100_s: { type: [number, "null"] }
+        price_new_eur:
+          type: [integer, "null"]
+          description: Null când sursa poartă 0, ceea ce înseamnă „necunoscut", nu „gratis".
         specs:
           type: object
           additionalProperties:
