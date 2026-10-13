@@ -451,3 +451,44 @@ describe("T237 — HEAD vede preţul, dar nu cumpără", () => {
     expect(r.headers.get("PAYMENT-RESPONSE")).toBeTruthy();
   });
 });
+
+// ── T285 — the 402 carries a Bazaar declaration PayAI can catalog ───────────
+describe("Bazaar discovery declaration (T285)", () => {
+  const head = (path: string, e: unknown) =>
+    app.fetch(new Request(`https://api.test${path}`, { method: "HEAD" }), e as never);
+  async function requiredOf(path: string, method: "GET" | "HEAD" = "GET") {
+    const e = env(ON);
+    const res = method === "GET" ? await get(path, e) : await head(path, e);
+    expect(res.status).toBe(402);
+    return decodePaymentRequiredHeader(res.headers.get("PAYMENT-REQUIRED")!);
+  }
+
+  test("specs: a valid declaration, with the route TEMPLATE, not one car's URL", async () => {
+    const { validateDiscoveryExtension } = await import("@x402/extensions/bazaar");
+    const pr = await requiredOf(await specsPath());
+    const bazaar = (pr.extensions as Record<string, unknown> | undefined)?.bazaar as Record<string, unknown>;
+    expect(bazaar).toBeTruthy();
+    expect(validateDiscoveryExtension(bazaar as never).valid).toBe(true);
+    const info = bazaar.info as { input: Record<string, unknown> };
+    expect(info.input.method).toBe("GET");
+    // one catalog entry for the route, whichever car a buyer pays for
+    expect(JSON.stringify(bazaar)).toContain("/v1/variants/:id/specs");
+    expect(pr.resource?.serviceName).toBe("cars-data.com API");
+    expect(pr.resource?.tags).toContain("vehicle-specs");
+    expect(pr.resource?.iconUrl).toBe("https://cars-data.com/apple-touch-icon.png");
+  });
+
+  test("search: a valid declaration that names the required q", async () => {
+    const { validateDiscoveryExtension } = await import("@x402/extensions/bazaar");
+    const pr = await requiredOf("/v1/search?q=golf");
+    const bazaar = (pr.extensions as Record<string, unknown>).bazaar;
+    expect(validateDiscoveryExtension(bazaar as never).valid).toBe(true);
+    expect(JSON.stringify(bazaar)).toContain('"q"');
+  });
+
+  test("HEAD sees the same price but carries NO declaration — it never buys", async () => {
+    const pr = await requiredOf(await specsPath(), "HEAD");
+    expect((pr.extensions as Record<string, unknown> | undefined)?.bazaar).toBeUndefined();
+    expect(pr.accepts[0]!.amount).toBe("50000");
+  });
+});
