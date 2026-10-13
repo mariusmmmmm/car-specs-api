@@ -17,7 +17,7 @@ async function main() {
   const search = await client.callTool({ name: "search_cars", arguments: { query: "corolla", locale: "ro" } });
   console.log("\nsearch_cars(corolla):", search.content[0].text.slice(0, 300));
 
-  const searchData = JSON.parse(search.content[0].text);
+  const searchData = JSON.parse(search.content[0].text).data;
   const variantId = searchData[0].variant_id;
 
   const specs = await client.callTool({ name: "get_specs", arguments: { variant_id: variantId, locale: "ro" } });
@@ -29,13 +29,13 @@ async function main() {
     name: "filter_cars",
     arguments: { fuel: "electric", power_min: 200, limit: 3 },
   });
-  console.log("\nfilter_cars(electric, power_min=200):", JSON.parse(filter.content[0].text).length, "hits");
+  console.log("\nfilter_cars(electric, power_min=200):", JSON.parse(filter.content[0].text).data.length, "hits");
 
   const images = await client.callTool({ name: "get_images", arguments: { variant_id: variantId } });
-  console.log("\nget_images:", JSON.parse(images.content[0].text).length, "images");
+  console.log("\nget_images:", JSON.parse(images.content[0].text).data.length, "images");
 
-  const gens = await client.callTool({ name: "list_generations", arguments: { model_id: 3208 } });
-  console.log("\nlist_generations(model 3208):", JSON.parse(gens.content[0].text).length, "generations");
+  const gens = await client.callTool({ name: "list_generations", arguments: { model_id: searchData[0].model_id } });
+  console.log("\nlist_generations(first hit's model):", JSON.parse(gens.content[0].text).data.length, "generations");
 
   const cmp = await client.callTool({
     name: "compare_variants",
