@@ -44,7 +44,7 @@ compare.get("/", async (c) => {
   const data = ids.map((id, i) => {
     const r = results[i]!;
     if (r.last_synced_at > latest) latest = r.last_synced_at;
-    return { variant_id: id, locale, specs: r.specs };
+    return { variant_id: id, locale, ...r.summary, specs: r.specs };
   });
 
   return c.json(envelope(data, { locale, last_synced_at: latest.toISOString() }));
