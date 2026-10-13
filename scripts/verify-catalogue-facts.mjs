@@ -49,12 +49,14 @@ async function prodCounts() {
     (select count(*) from generations),
     (select count(*) from specs_catalog where is_active),
     (select count(distinct k) from variant_doc, jsonb_object_keys(specs) k),
-    (select count(*) from spec_categories)`;
+    (select count(*) from spec_categories),
+    (select count(distinct m.id) from models m join generations g on g.model_id=m.id
+       join variants v on v.generation_id=g.id and v.is_active)`;
   const out = execFileSync("ssh", ["-o", "ConnectTimeout=20", "cars-data-prod",
     `sudo -u postgres psql -d cars_prod -At -F'|' -c "${q.replace(/\n/g, " ")}"`], { encoding: "utf8" });
-  const [variants, withSpecs, brands, generations, defined, present, cats] =
+  const [variants, withSpecs, brands, generations, defined, present, cats, models] =
     out.trim().split("\n").pop().split("|").map(Number);
-  return { variants, withSpecs, brands, generations, defined, present, cats };
+  return { variants, withSpecs, brands, generations, defined, present, cats, models };
 }
 
 let checks;
@@ -63,6 +65,7 @@ if (PROD) {
   checks = [
     ["variants", CATALOGUE.variants, p.variants],
     ["brands", CATALOGUE.brands, p.brands],
+    ["models", CATALOGUE.models, p.models],
     ["generations", CATALOGUE.generations, p.generations],
     ["specTypesDefined", CATALOGUE.specTypesDefined, p.defined],
     ["specTypesPresent", CATALOGUE.specTypesPresent, p.present],
@@ -75,6 +78,10 @@ if (PROD) {
     ["brands", CATALOGUE.brands, sql`
         SELECT count(DISTINCT b.id)::int n FROM brands b
         JOIN models m ON m.brand_id = b.id
+        JOIN generations g ON g.model_id = m.id
+        JOIN variants v ON v.generation_id = g.id AND v.is_active`],
+    ["models", CATALOGUE.models, sql`
+        SELECT count(DISTINCT m.id)::int n FROM models m
         JOIN generations g ON g.model_id = m.id
         JOIN variants v ON v.generation_id = g.id AND v.is_active`],
     ["generations", CATALOGUE.generations, sql`SELECT count(*)::int n FROM generations`],

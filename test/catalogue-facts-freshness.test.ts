@@ -44,7 +44,8 @@ describe("catalogue facts — prospețime", () => {
     expect(CATALOGUE.variantsWithSpecs).toBeLessThanOrEqual(CATALOGUE.variants);
     expect(CATALOGUE.specTypesPresent).toBeLessThanOrEqual(CATALOGUE.specTypesDefined);
     expect(CATALOGUE.brands).toBeGreaterThan(0);
-    expect(CATALOGUE.generations).toBeGreaterThan(CATALOGUE.brands);
+    expect(CATALOGUE.models).toBeGreaterThan(CATALOGUE.brands);
+    expect(CATALOGUE.generations).toBeGreaterThan(CATALOGUE.models);
     expect(CATALOGUE.variants).toBeGreaterThan(CATALOGUE.generations);
   });
 });

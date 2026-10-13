@@ -23,7 +23,7 @@
  *  exists to prevent, recreated one database over.
  *
  *  Re-run the verifier after every prod data deploy, not after every import. */
-export const CATALOGUE_AS_OF = "2026-10-10";
+export const CATALOGUE_AS_OF = "2026-10-13";
 
 export const CATALOGUE = {
   /** Active variants in prod. */
@@ -34,6 +34,11 @@ export const CATALOGUE = {
   variantsWithSpecs: 103_371,
   /** Brands with at least one active variant — NOT the 527-row master list. */
   brands: 120,
+  /** Models with at least one active variant. Added 2026-10-13 (T290): README
+   *  and openapi.yaml published "1,300+ models", the one catalogue number with
+   *  no fact behind it — true that day (1.357), but nothing would have noticed
+   *  the day it stopped being. */
+  models: 1_357,
   generations: 5_428,
   /** Spec types DEFINED in specs_catalog (all active). */
   specTypesDefined: 224,
