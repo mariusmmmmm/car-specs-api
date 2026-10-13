@@ -13,7 +13,9 @@
     "verify:catalogue": "npm run build:scripts && node scripts/verify-catalogue-facts.mjs --prod",
     "verify:catalogue:local": "npm run build:scripts && node scripts/verify-catalogue-facts.mjs",
     "openapi:build": "node scripts/build-openapi-json.mjs",
-    "openapi:check": "node scripts/build-openapi-json.mjs --check"
+    "openapi:check": "node scripts/build-openapi-json.mjs --check",
+    "server:build": "npm run build:scripts && node scripts/build-server-json.mjs",
+    "server:check": "npm run build:scripts && node scripts/build-server-json.mjs --check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
