@@ -23,15 +23,23 @@ export type VariantFilters = {
   limit: number;
 };
 
-export type SpecsResult = { last_synced_at: string; specs: Record<string, unknown> } | null;
+export type SpecsResult = { last_synced_at: string; specs: DemoVariant["specs"] } | null;
+
+// Concrete row types, not `unknown[]` (T286): the MCP tools now declare an
+// outputSchema, and the SDK REJECTS a result whose structuredContent does not
+// parse against it. Typed rows let tsc hold the schema in mcp-tools.ts to what
+// this file actually returns, instead of finding out on a live call.
+export type CarRow = ReturnType<typeof row>;
+export type GenerationRow = { generation_id: number; model_id: number; display_name: string; years: string | null };
+export type ImageRow = DemoVariant["images"][number];
 
 export type McpSource = {
   readonly demo: boolean;
-  search(locale: string, query: string, limit: number): Promise<unknown[]>;
+  search(locale: string, query: string, limit: number): Promise<CarRow[]>;
   specs(locale: string, variantId: number): Promise<SpecsResult>;
-  generations(locale: string, modelId: number): Promise<unknown[]>;
-  filter(locale: string, f: VariantFilters): Promise<unknown[]>;
-  images(variantId: number): Promise<unknown[]>;
+  generations(locale: string, modelId: number): Promise<GenerationRow[]>;
+  filter(locale: string, f: VariantFilters): Promise<CarRow[]>;
+  images(variantId: number): Promise<ImageRow[]>;
 };
 
 

@@ -38,6 +38,8 @@ Tools exposed:
 | `filter_cars` | Structured filter: fuel, body, drive, power/price range, year, EV-only |
 | `get_images` | Image URLs (own CDN) for a vehicle variant |
 
+Every tool declares an `outputSchema` and is annotated read-only. A successful call returns the result as `structuredContent` and, for clients without structured output, the same object serialized in the text block. Lists come wrapped as `{ "data": [...] }` — the shape the REST envelope uses; until 2026-10 `search_cars`, `list_generations` and `get_images` returned a bare array. Errors are `isError: true` with `{ "error": "..." }` and no `structuredContent`.
+
 Without a key the MCP server answers anonymously **on the demo scope** — the same 40 cars, rate-limited per IP. With a key it answers on that key's tier: send it as `Authorization: Bearer <key>` or `X-Api-Key`, or, where a client takes only a URL (claude.ai and ChatGPT custom connectors), as `https://api.cars-data.com/mcp?key=<key>`. A key that is present but invalid, revoked or over quota gets its 401/403/429 — it is never quietly downgraded to the demo.
 
 ## REST API
