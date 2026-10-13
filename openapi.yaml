@@ -14,7 +14,7 @@ info:
   summary: Car specifications for AI agents and applications — generation-level, 20 languages, EV data.
   description: |
     Read-only, cacheable, versioned REST API over cars-data.com's multilingual
-    vehicle catalogue (103,099 variants, 1,300+ models, 5,395 generations,
+    vehicle catalogue (103,372 variants, 1,357 models, 5,428 generations,
     224 spec types, 20 languages).
 
     # Three ways in
