@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
-import { HTTPFacilitatorClient, x402ResourceServer, type FacilitatorClient, type RouteConfig } from "@x402/core/server";
+import { HTTPFacilitatorClient, x402ResourceServer, type FacilitatorClient, type RouteConfig, type RoutesConfig } from "@x402/core/server";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import type { PaymentPayload, PaymentRequirements, SupportedResponse } from "@x402/core/types";
 import { decodePaymentRequiredHeader, decodePaymentResponseHeader } from "@x402/core/http";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
@@ -70,7 +71,104 @@ const BROWSER_HTML =
   '<p>This endpoint is paid per request with x402 (USDC), or with an API key. ' +
   'See <a href="https://cars-data.com/en/api">cars-data.com/en/api</a>.</p>';
 
-function routeConfig(s: X402Settings, route: { priceUsd: number; description: string }, url: string): RouteConfig {
+// ── Bazaar discovery (T285) ────────────────────────────────────────────────
+//
+// PayAI's Bazaar (GET https://facilitator.payai.network/discovery/resources) is
+// where agents with a wallet look for paid APIs: 20,087 resources on
+// 2026-10-13, not one of them vehicle specifications — and not us. Listing is
+// automatic and needs no form: our 402 declares the resource, the buyer's x402
+// client echoes the declaration into its payment payload, and the facilitator
+// catalogs it on /verify (no funds move) or /settle. A GET resource is admitted
+// once its read-only probe answers 402, which ours do. PayAI's docs:
+// https://docs.payai.network/x402/facilitators/bazaar.md
+//
+// The HTTP method is not declared here: the bazaar server extension fills it,
+// and `routeTemplate`, from the request it enriches.
+//
+// The routes are passed to the middleware KEYED by pattern ("GET
+// /v1/variants/:id/specs") so the bazaar server extension can fill
+// `routeTemplate`. Without it the catalog key is the concrete URL, and every
+// car someone paid for would become its own listing.
+const SPECS_EXAMPLE = {
+  data: {
+    variant_id: "v_1a2b3c4d",
+    locale: "en",
+    specs: {
+      power_hp: { label: "Power", value: "150 hp", confidence: 0.98 },
+      fuel_type: { label: "Fuel", value: "Petrol", confidence: 1 },
+      length_mm: { label: "Length", value: "4370 mm", confidence: 0.97 },
+    },
+  },
+  meta: { locale: "en", last_synced_at: "2026-10-01T00:00:00.000Z" },
+};
+const SEARCH_EXAMPLE = {
+  data: [
+    {
+      variant_id: "v_1a2b3c4d",
+      display_name: "Golf 1.5 eTSI 150hp Style",
+      brand_slug: "volkswagen",
+      model_slug: "golf",
+      generation_id: "g_5e6f7a8b",
+      year_from: 2020,
+      year_to: null,
+    },
+  ],
+  meta: { locale: "en", last_synced_at: "2026-10-13T00:00:00.000Z" },
+  links: { next: "c_9a8b7c6d" },
+};
+const LOCALES = ["ar", "bg", "cs", "da", "de", "el", "en", "es", "fr", "hr", "hu", "it", "no", "pl", "pt", "ro", "sk", "sr", "sv", "tr"];
+
+function discovery(label: string) {
+  if (label === "/v1/search") {
+    return declareDiscoveryExtension({
+      input: { q: "golf", locale: "en", limit: 10 },
+      inputSchema: {
+        type: "object",
+        properties: {
+          q: { type: "string", description: "Brand, model or variant name, e.g. 'bmw 3 series'" },
+          locale: { type: "string", enum: LOCALES, default: "en" },
+          limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
+          cursor: { type: "string", description: "links.next of the previous page" },
+        },
+        required: ["q"],
+      },
+      output: { example: SEARCH_EXAMPLE },
+    });
+  }
+  return declareDiscoveryExtension({
+    pathParams: { id: "v_1a2b3c4d" },
+    pathParamsSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Opaque variant id (v_…) from /v1/search" } },
+      required: ["id"],
+    },
+    input: { locale: "en" },
+    inputSchema: {
+      type: "object",
+      properties: { locale: { type: "string", enum: LOCALES, default: "en" } },
+    },
+    output: { example: SPECS_EXAMPLE },
+  });
+}
+
+// Keyed by the REQUEST's method: paidRoute() admits GET and HEAD (T237), and a
+// "GET …" key would not match a HEAD, which then fell through to 405 instead of
+// seeing the price. The discovery declaration rides on GET only — a HEAD never
+// buys (x402Gate answers a paid HEAD 405), so a declaration on it could only
+// put a wrong "HEAD" listing in the catalog through a verify.
+function routeConfig(
+  s: X402Settings,
+  route: { label: string; priceUsd: number; description: string },
+  method: string,
+): RoutesConfig {
+  return { [`${method} ${route.label}`]: routeEntry(s, route, method === "GET") };
+}
+
+function routeEntry(
+  s: X402Settings,
+  route: { label: string; priceUsd: number; description: string },
+  declare: boolean,
+): RouteConfig {
   return {
     accepts: {
       scheme: "exact",
@@ -79,10 +177,12 @@ function routeConfig(s: X402Settings, route: { priceUsd: number; description: st
       network: s.network as `${string}:${string}`,
       maxTimeoutSeconds: 300,
     },
-    resource: url,
     description: route.description,
     mimeType: "application/json",
     serviceName: "cars-data.com API",
+    tags: ["cars", "vehicle-specs", "automotive", "ev", "multilingual"],
+    iconUrl: "https://cars-data.com/apple-touch-icon.png",
+    ...(declare ? { extensions: discovery(route.label) } : {}),
     customPaywallHtml: BROWSER_HTML,
     // The JSON a client WITHOUT an x402 library reads. The machine-readable
     // terms are in the PAYMENT-REQUIRED header; this says the same in words,
@@ -189,7 +289,7 @@ export async function x402Gate(c: Context<{ Bindings: Env; Variables: Variables 
 
   const server = new x402ResourceServer(new CachingFacilitator(settings.facilitatorUrl));
   registerExactEvmScheme(server);
-  const mw = paymentMiddleware(routeConfig(settings, route, c.req.url), server);
+  const mw = paymentMiddleware(routeConfig(settings, route, c.req.method), server);
 
   const paymentPresented = Boolean(c.req.header("payment-signature") || c.req.header("x-payment"));
 
