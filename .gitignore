@@ -13,3 +13,16 @@ dist/
 # committed: a stale copy would let the generator freeze a set quietly against
 # yesterday's catalogue. The refresh one-liner is in the generator's header.
 .demo-prod-ids.txt
+
+# Chei private. NU le scoate: pe 2026-10-03 `mcp-registry-key.pem` (o cheie
+# privată de 119 bytes) stătea neurmărită în checkout-ul `api/` fără să fie
+# ignorată, deci un `git add .` ar fi comis-o. Patternul a fost scris în aceeași
+# zi, dar pe `feat/t29-api-docs` — ramura pe care T164 a abandonat-o — așa că
+# n-a ajuns niciodată pe linia care rulează. Verificat la T281: niciun `.pem` sau
+# `.key` nu e urmărit pe nicio ramură, deci patternul nu scoate nimic din
+# urmărire; închide doar gaura. (T281, descoperit în T275.)
+*.pem
+*.key
+
+# Metadate de Finder, regenerate la fiecare deschidere a folderului în macOS.
+.DS_Store
