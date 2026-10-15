@@ -31,7 +31,11 @@ try {
   ({ CATALOGUE } = require_("../.tsbuild/lib/catalogue-facts.js"));
   ({ SUPPORTED_LOCALES } = require_("../.tsbuild/lib/locale.js"));
 } catch (e) {
-  console.error(`Compiled libs missing (${e.code ?? e.message}).\nRun: npx tsc -p tsconfig.build-scripts.json`);
+  // T253: `tsc` singur NU e de ajuns. Emite CommonJS, iar `api/package.json` are
+  // "type": "module", deci Node citeşte `.tsbuild/**/*.js` ca ESM şi cade cu
+  // „exports is not defined in ES module scope". Marcatorul din `.tsbuild/package.json`
+  // e ce lipsea — de aceea verificatorul nu putea rula dintr-o stare curată.
+  console.error(`Compiled libs missing (${e.code ?? e.message}).\nRun: npm run build:scripts`);
   process.exit(1);
 }
 
@@ -106,6 +110,58 @@ if (!localeOk) bad++;
 console.log(`  ${localeOk ? "ok  " : "DRIFT"} ${"locales".padEnd(12)} published ${String(CATALOGUE.locales).padStart(7)}   actual ${String(SUPPORTED_LOCALES.length).padStart(7)}`);
 
 if (sql) await sql.end();
+
+// ── T253: suprafeţele PUBLICATE din afara acestui repo ──────────────────────
+// `catalogue-facts.ts` există fiindcă aceleaşi cifre erau tastate în zece locuri. Dar
+// listarea Apify trăieşte în ALT repo, deci verificatorul nu se uita acolo niciodată —
+// şi pe 2026-10-12 publica `5,299+ generations`, `1,300+ models` şi `180 spec types`
+// în timp ce canonicul spunea 5.428 / 1.357 / 222.
+//
+// Calea e CONFIGURABILĂ, nu presupusă: cele două repo-uri sunt fraţi azi, dar nimic nu
+// garantează layout-ul. `APIFY_ACTOR_DIR` o schimbă; lipsa directorului e un SKIP
+// explicit, nu o trecere tăcută.
+// `(?<![\d-])` scoate intervalele: „compare 2-4 variants" e o limită de unealtă, nu o
+// afirmaţie despre catalog. Fără excluderea asta, verificatorul compara 4 cu 103.372.
+const CLAIM = /(?<![\d-])([\d][\d,.]*)\s*\+?\s*(spec types?|models?|generations?|variants?|languages?)/gi;
+const CANON = {
+  "spec type": CATALOGUE.specTypesPresent, "spec types": CATALOGUE.specTypesPresent,
+  model: CATALOGUE.models, models: CATALOGUE.models,
+  generation: CATALOGUE.generations, generations: CATALOGUE.generations,
+  variant: CATALOGUE.variants, variants: CATALOGUE.variants,
+  language: CATALOGUE.locales, languages: CATALOGUE.locales,
+};
+const actorDir = process.env.APIFY_ACTOR_DIR
+  ?? new URL("../../apify-actor/", import.meta.url).pathname;
+const { existsSync, readFileSync, readdirSync } = await import("node:fs");
+if (!existsSync(actorDir)) {
+  console.log(`\n  skip  listarea Apify — ${actorDir} nu există (setează APIFY_ACTOR_DIR)`);
+} else {
+  const fisiere = ["README.md", ".actor/actor.json"].filter((f) => existsSync(actorDir + "/" + f));
+  if (fisiere.length === 0) {
+    console.error(`\n  DRIFT listarea Apify — ${actorDir} există, dar n-are README.md sau .actor/actor.json`);
+    bad++;
+  }
+  let claims = 0;
+  for (const f of fisiere) {
+    const text = readFileSync(actorDir + "/" + f, "utf8");
+    for (const m of text.matchAll(CLAIM)) {
+      const n = Number(m[1].replace(/[,.]/g, ""));
+      const canon = CANON[m[2].toLowerCase()];
+      if (canon === undefined || !Number.isFinite(n)) continue;
+      claims++;
+      const ok = n === canon;
+      if (!ok) bad++;
+      console.log(`  ${ok ? "ok  " : "DRIFT"} apify:${f.padEnd(17)} „${m[0].trim()}" vs ${canon}`);
+    }
+  }
+  // Zero afirmaţii găsite înseamnă că regexul nu mai prinde forma textului, nu că
+  // listarea e curată. Un verificator care trece pe zero intrări nu verifică nimic.
+  if (claims === 0) {
+    console.error("\n  DRIFT listarea Apify — ZERO afirmaţii numerice găsite. Un pass pe zero intrări nu e un pass.");
+    bad++;
+  }
+}
+
 if (bad) {
   console.error(`\n${bad} number(s) drifted. Update src/lib/catalogue-facts.ts — and only there.`);
   process.exit(1);
