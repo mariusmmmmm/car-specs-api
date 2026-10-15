@@ -26,12 +26,30 @@ const TESTNETS: ReadonlySet<string> = new Set(["eip155:84532"]);
 // The two prices, and why they are not the $0.001 the July plan (BIZ-L2d) had.
 //
 // Full Specs — every data module, the whole catalogue, English — is published
-// at €2,900 on https://cars-data.com/en/api. Over ~103k variants that is about
-// €0.028 per variant. At $0.001 a call the same catalogue would cost ~$103
-// through this door: a 28x discount on the licensed export, sold to anyone,
-// with no terms negotiated. So the per-variant price sits ABOVE the export's
-// per-variant price — the export stays the cheap way to buy in bulk, and this
-// stays the convenient way to buy a few cars, which is what an agent needs.
+// at €2,900 on https://cars-data.com/en/api. Over 103,412 variants (counted in
+// cars_v3 on 2026-10-15, not quoted from memory) that is about €0.028 per
+// variant. At $0.001 a call the same catalogue would cost ~$103 through this
+// door: a 28x discount on the licensed export, sold to anyone, with no terms
+// negotiated. So $0.05 sits well above the INTERNAL-use export price per
+// variant — the export stays the cheap way to buy in bulk, and this stays the
+// convenient way to buy a few cars, which is what an agent needs.
+//
+// BUT MIND WHICH LICENCE YOU COMPARE AGAINST (T333, D-24, 2026-10-15). Until
+// that date this comment said the per-variant price sits ABOVE "the export's"
+// price, full stop. That is true of the internal-use export and FALSE of the
+// public-display one, which is the licence an agent displaying our values
+// actually needs: €2,900 x 2 = €5,800, i.e. €0.056 a variant. $0.05 is roughly
+// €0.046, so the whole catalogue bought here (~$5,171 ≈ €4,790) would come out
+// BELOW the €5,800 public export — about 17% below.
+//
+// That is not a reason to raise this price (owner, 2026-10-15: leave it at
+// $0.05 — the volumes are zero and this is the one door agents use). It is a
+// reason to know what actually stops the arbitrage: A5, which says in words
+// that bulk access is licensed as an export under Part B. The guards that
+// would stop it in CODE — M4 and the M9 coverage-ratio detector — are NOT in
+// production; T111 §10.3 dropped them when the Free tier went away. So the cap
+// here is contractual, not technical. If x402 volume ever stops being zero,
+// re-decide this before anything else.
 //
 // Search returns only identity data (names, years, opaque ids) that the public
 // site already shows, and it is the only way a caller without a key can learn
