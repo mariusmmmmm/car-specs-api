@@ -64,8 +64,19 @@
  *  Plan access to every caller". A5 gains that paying per request does not
  *  license harvesting: bulk access is an export. The wording is conditional
  *  ("where an endpoint offers it"), so it is true while x402 is off, as it is
- *  when this deploys. Paired branch in v3: feat/t217-terms-x402. */
-export const TOS_VERSION = "2026-10-11-v7";
+ *  when this deploys. Paired branch in v3: feat/t217-terms-x402.
+ *
+ *  2026-10-15-v8: B3 gains a last paragraph saying WHY the public-display
+ *  export costs the multiplier when the same public display through the API
+ *  costs no multiplier at all. No price moved — the owner answered D-24 on
+ *  2026-10-15 by keeping the 2x and writing the reason down, so a buyer who
+ *  reads both Parts gets an answer instead of an inconsistency. The reason, in
+ *  one line: Part A licenses the Output call by call and revocably, capped by
+ *  A5 below a substantial part; an export is one complete, permanent, offline,
+ *  unmetered copy that A12 leaves with the buyer. Nothing operative changed,
+ *  but the ENGLISH text did, so the version moves and keys issued from here on
+ *  record -v8. Paired branch in v3: fix/t333-d24-licenta-publica. */
+export const TOS_VERSION = "2026-10-15-v8";
 
 /** "clearfly.co.uk" is a fine answer, so a missing scheme is added rather than
  *  refused. What must hold: http(s), a dotted hostname, nothing else. Returns
