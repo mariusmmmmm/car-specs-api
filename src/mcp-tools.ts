@@ -6,10 +6,13 @@ import { DEMO_UNSUPPORTED_FILTERS, type McpSource } from "./lib/mcp-source";
 import { CATALOGUE, n } from "./lib/catalogue-facts";
 import { DEMO_SET_SIZE } from "./lib/demo-set";
 import type { X402Settings } from "./lib/x402-config";
-import type { searchVariants } from "./lib/queries";
+import type { filterVariants, searchVariants, VariantFilters } from "./lib/queries";
 import type { localizeVariantSpecs } from "./lib/localize-variant";
+import { doorsSentence } from "./lib/doors";
 
-// The eight MCP tools, outside src/mcp.ts (T286).
+// The ten MCP tools, outside src/mcp.ts (T286; T334 added filter_catalogue and
+// compare_full, the two operations the Apify Actor sold and this surface did
+// not).
 //
 // mcp.ts extends McpAgent from agents/mcp, which imports `cloudflare:workers`
 // and cannot load under vitest — the same wall T152 hit with index.ts. While
@@ -49,6 +52,7 @@ export type ToolContext = {
 export type PaidQueries = {
   search(locale: string, query: string, limit: number): ReturnType<typeof searchVariants>;
   specs(locale: string, variantId: number): ReturnType<typeof localizeVariantSpecs>;
+  filter(locale: string, f: VariantFilters): ReturnType<typeof filterVariants>;
 };
 
 // ── input parameters ────────────────────────────────────────────────────────
@@ -138,19 +142,46 @@ const catalogueRow = z.looseObject({
 const lastSynced = z.string().describe("ISO-8601 time the data was last synced — surface it with the specs");
 const localeOut = z.enum(SUPPORTED_LOCALES).describe("Language the response is in");
 
+// T334 — on a demo answer, the way to the full catalogue, IN the result an
+// agent reads, not only in a description it may have skimmed. Present only
+// when the answer came from the demo set and x402 is on; absent otherwise.
+const fullCatalogue = z
+  .string()
+  .optional()
+  .describe("Present on demo answers: the paid tool that answers the same question over the full catalogue, with its price");
+
+const filterRow = z.looseObject({
+  variant_id: z.string().describe("Opaque variant id, e.g. v_1a2b3c4d. Pass it to get_specs_full or compare_full."),
+  generation_id: z.string().describe("Opaque generation id"),
+  display_name: z.string().describe("Full variant name, localized when a translation exists"),
+  power_hp: z.number().nullable().describe("Power, hp"),
+  battery_kwh: z.number().nullable().describe("Traction battery capacity, kWh; null without one"),
+  top_speed_kmh: z.number().nullable().describe("Top speed, km/h"),
+  torque_nm: z.number().nullable().describe("Torque, Nm"),
+  accel_0_100_s: z.number().nullable().describe("0–100 km/h, seconds"),
+  fuel_slug: z.string().nullable().describe("Fuel type slug, e.g. electric, petrol"),
+  body_type_en: z.string().nullable().describe("Body type, English label"),
+  price_new_eur: z.number().nullable().describe("New list price, EUR"),
+});
+
 export const OUTPUT = {
-  search_cars: z.looseObject({ data: z.array(carRow).describe("Matches, best first; empty when nothing matches") }),
+  search_cars: z.looseObject({
+    data: z.array(carRow).describe("Matches, best first; empty when nothing matches"),
+    full_catalogue: fullCatalogue,
+  }),
   get_specs: z.looseObject({
     variant_id: variantToken,
     locale: localeOut,
     last_synced_at: lastSynced,
     specs: specsRecord,
+    full_catalogue: fullCatalogue,
   }),
   compare_variants: z.looseObject({
     locale: localeOut,
     data: z
       .array(z.looseObject({ variant_id: variantToken, specs: specsRecord }))
       .describe("One entry per requested variant, in the order asked"),
+    full_catalogue: fullCatalogue,
   }),
   list_generations: z.looseObject({ data: z.array(generationRow).describe("Generations of the model") }),
   filter_cars: z.looseObject({
@@ -160,6 +191,7 @@ export const OUTPUT = {
       .array(z.string())
       .optional()
       .describe("Filters you passed that the demo set cannot apply — results are NOT narrowed by them"),
+    full_catalogue: fullCatalogue,
   }),
   get_images: z.looseObject({ data: z.array(imageRow).describe("Images of the variant; empty when it has none") }),
   search_catalogue: z.looseObject({ data: z.array(catalogueRow).describe("Matches, most powerful first") }),
@@ -179,6 +211,36 @@ export const OUTPUT = {
     price_new_eur: z.number().nullable().describe("New list price, EUR"),
     last_synced_at: lastSynced,
     specs: specsRecord,
+  }),
+  filter_catalogue: z.looseObject({
+    data: z.array(filterRow).describe("Matches in catalogue order; empty when nothing matches"),
+    next_cursor: z
+      .string()
+      .nullable()
+      .describe("Opaque cursor for the next page, or null on the last one. Pass it as `cursor`."),
+  }),
+  compare_full: z.looseObject({
+    locale: localeOut,
+    data: z
+      .array(
+        z.looseObject({
+          variant_id: variantToken,
+          display_name: z.string().describe("Full variant name"),
+          brand_slug: z.string(),
+          model_slug: z.string(),
+          year_from: z.number().nullable(),
+          year_to: z.number().nullable(),
+          power_hp: z.number().nullable(),
+          battery_kwh: z.number().nullable(),
+          top_speed_kmh: z.number().nullable(),
+          torque_nm: z.number().nullable(),
+          accel_0_100_s: z.number().nullable(),
+          price_new_eur: z.number().nullable(),
+          last_synced_at: lastSynced,
+          specs: specsRecord,
+        }),
+      )
+      .describe("One entry per requested variant, in the order asked"),
   }),
 } as const;
 
@@ -208,18 +270,48 @@ const READ_ONLY = { readOnlyHint: true, openWorldHint: false, idempotentHint: tr
 
 // ── the six demo tools ──────────────────────────────────────────────────────
 
-export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
+/** @param x402 the paid settings while x402 is on, so every demo tool can
+ *  name its paid pair and price; null = off, and the demo names the other two
+ *  doors only. Pointing at a tool that is not registered would be the T334
+ *  defect in reverse. */
+export function registerDemoTools(server: McpServer, ctx: ToolContext, x402: X402Settings | null = null): void {
+  const doorsNote = doorsSentence(x402);
   const unavailable = () =>
     failure({
-      error:
-        "The demo dataset is briefly unavailable. Nothing is wrong with your request — retry shortly. " +
-        "The full catalogue is a licensed export: https://cars-data.com/en/api",
+      error: `The demo dataset is briefly unavailable. Nothing is wrong with your request — retry shortly. ${doorsNote}`,
     });
   const notInDemo = (what: string) =>
     failure({
-      error: `${what} is outside the demo set (${DEMO_SET_SIZE} cars) — the only self-serve tier. All ${n(CATALOGUE.variants)} variants are licensed as an export: https://cars-data.com/en/api`,
+      error: `${what} is outside the demo set (${DEMO_SET_SIZE} cars) — the only self-serve tier. ${doorsNote}`,
     });
   const noVariant = (id: string) => failure({ error: `No variant with id ${id}` });
+
+  // T334 — the paid pair of a demo tool, for its description and its answers.
+  // The demo is the shop window; this is the sign on the door that opens.
+  const PAIR: Record<string, { tool: string; price: (s: X402Settings) => number } | undefined> = {
+    search_cars: { tool: "search_catalogue", price: (s) => s.searchPriceUsd },
+    get_specs: { tool: "get_specs_full", price: (s) => s.specsPriceUsd },
+    compare_variants: { tool: "compare_full", price: (s) => s.comparePriceUsd },
+    filter_cars: { tool: "filter_catalogue", price: (s) => s.filterPriceUsd },
+  };
+  /** Appended to a demo tool's description. */
+  const pairNote = (tool: string): string => {
+    const pair = PAIR[tool];
+    if (x402 && pair) {
+      return (
+        ` This answers from a fixed ${DEMO_SET_SIZE}-car demo set. For the full ${n(CATALOGUE.variants)}-variant catalogue ` +
+        `call ${pair.tool} — paid per call with x402 (USDC on Base), $${pair.price(x402)}, no key, no account.`
+      );
+    }
+    return ` This answers from a fixed ${DEMO_SET_SIZE}-car demo set. ${doorsNote}`;
+  };
+  /** The `full_catalogue` field on a DEMO answer; undefined on a key holder's
+   *  answer (there is nothing to upgrade to) and while x402 is off. */
+  const fullCatalogue = (tool: string, demo: boolean): string | undefined => {
+    const pair = PAIR[tool];
+    if (!demo || !x402 || !pair) return undefined;
+    return `Demo answer (${DEMO_SET_SIZE} cars). Same question over all ${n(CATALOGUE.variants)} variants: ${pair.tool}, $${pair.price(x402)} per call via x402.`;
+  };
 
   server.registerTool(
     "search_cars",
@@ -229,8 +321,8 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
         `Free-text search across ${n(CATALOGUE.variants)} vehicle variants, ${CATALOGUE.brands} brands, ` +
         `${CATALOGUE.locales} languages. Returns candidate variant_ids to pass to ` +
         "get_specs/get_images/compare_variants. Each result carries generation_id and production years so " +
-        "same-named variants from different generations can be told apart. " +
-        `Without a key — or with a self-serve demo key — this answers from a fixed ${DEMO_SET_SIZE}-car demo set; the full catalogue is a licensed export.`,
+        "same-named variants from different generations can be told apart." +
+        pairNote("search_cars"),
       inputSchema: { query: queryParam(), locale: localeParam, limit: limitParam },
       outputSchema: OUTPUT.search_cars,
       annotations: READ_ONLY,
@@ -240,7 +332,7 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
       const src = await ctx.source(locale);
       if (!src) return unavailable();
       const rows = await src.search(resolveLocale(locale), query, limit ?? 10);
-      return ok("search_cars", { data: await ctx.encode(rows) });
+      return ok("search_cars", { data: await ctx.encode(rows), full_catalogue: fullCatalogue("search_cars", src.demo) });
     },
   );
 
@@ -252,7 +344,8 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
         `Full localized specs for one vehicle variant, in any of ${CATALOGUE.locales} languages — ` +
         `${CATALOGUE.specTypesDefined} spec types covering engine & fuel, performance, EV/hybrid, safety, comfort & ` +
         "interior, exterior, chassis, dimensions & weights, consumption (WLTP/NEDC). Each spec carries a " +
-        "confidence score; the response carries last_synced_at — surface both so you don't overstate certainty.",
+        "confidence score; the response carries last_synced_at — surface both so you don't overstate certainty." +
+        pairNote("get_specs"),
       inputSchema: {
         variant_id: z.string().describe("Opaque variant id from search_cars or filter_cars, e.g. v_1a2b3c4d"),
         locale: localeParam,
@@ -275,6 +368,7 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
         locale: loc,
         last_synced_at: result.last_synced_at,
         specs: result.specs,
+        full_catalogue: fullCatalogue("get_specs", src.demo),
       });
     },
   );
@@ -283,7 +377,7 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
     "compare_variants",
     {
       title: "Compare variants",
-      description: "Side-by-side localized specs for 2-4 vehicle variants.",
+      description: "Side-by-side localized specs for 2-4 vehicle variants." + pairNote("compare_variants"),
       inputSchema: {
         variant_ids: z
           .array(z.string())
@@ -311,6 +405,7 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
       return ok("compare_variants", {
         locale: loc,
         data: variant_ids.map((token, i) => ({ variant_id: token, specs: results[i]!.specs })),
+        full_catalogue: fullCatalogue("compare_variants", src.demo),
       });
     },
   );
@@ -319,7 +414,7 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
     "list_generations",
     {
       title: "List generations of a model",
-      description: "Generations/facelifts of a model, with production years.",
+      description: "Generations/facelifts of a model, with production years." + pairNote("list_generations"),
       inputSchema: {
         model_id: z.string().describe("Opaque model id from a search_cars or filter_cars result, e.g. m_1a2b3c4d"),
         locale: localeParam,
@@ -344,7 +439,8 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Filter cars",
       description:
-        "Structured catalog filter: fuel type, body type, drive layout, power/price range, model year, EV-only.",
+        "Structured catalog filter: fuel type, body type, drive layout, power/price range, model year, EV-only." +
+        pairNote("filter_cars"),
       inputSchema: {
         fuel: z
           .string()
@@ -393,6 +489,7 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
       return ok("filter_cars", {
         data: await ctx.encode(rows),
         ...(src.demo ? { demo: true, ignored_filters: ignored } : {}),
+        full_catalogue: fullCatalogue("filter_cars", src.demo),
       });
     },
   );
@@ -401,7 +498,7 @@ export function registerDemoTools(server: McpServer, ctx: ToolContext): void {
     "get_images",
     {
       title: "Get variant images",
-      description: "Image URLs (own CDN, no attribution burden) for a vehicle variant.",
+      description: "Image URLs (own CDN, no attribution burden) for a vehicle variant." + pairNote("get_images"),
       inputSchema: {
         variant_id: z.string().describe("Opaque variant id from search_cars or filter_cars, e.g. v_1a2b3c4d"),
       },
@@ -452,6 +549,81 @@ export function paidHandlers(ctx: ToolContext, q: PaidQueries) {
         ...result.summary,
         last_synced_at: result.last_synced_at.toISOString(),
         specs: result.specs,
+      });
+    },
+
+    // T334 — the two the Apify Actor sold and this surface did not.
+    async filter_catalogue(args: {
+      fuel?: string;
+      body?: string;
+      drive?: string;
+      power_min?: number;
+      power_max?: number;
+      price_max?: number;
+      year?: number;
+      ev?: boolean;
+      cursor?: string;
+      locale?: string;
+      limit?: number;
+    }) {
+      ctx.track("filter_catalogue:paid", args.locale);
+      const limit = args.limit ?? 24;
+      let cursor = 0;
+      if (args.cursor) {
+        const c = await ctx.token("variant", args.cursor);
+        if (c === null) return failure({ error: `Not a valid cursor: ${args.cursor}` });
+        cursor = c;
+      }
+      const rows = await q.filter(resolveLocale(args.locale), {
+        fuel: args.fuel,
+        body: args.body,
+        drive: args.drive,
+        powerMin: args.power_min ?? null,
+        powerMax: args.power_max ?? null,
+        priceMax: args.price_max ?? null,
+        year: args.year ?? null,
+        ev: args.ev ?? false,
+        cursor,
+        limit,
+      });
+      // The REST route's keyset cursor is the last row's variant id; here it is
+      // handed back as the same opaque token the row carries.
+      const data = await ctx.encode(
+        rows.map((r) => ({
+          variant_id: r.variant_id,
+          generation_id: r.generation_id,
+          display_name: r.display_name,
+          power_hp: r.power_hp,
+          battery_kwh: r.battery_kwh !== null ? Number(r.battery_kwh) : null,
+          top_speed_kmh: r.top_speed_kmh,
+          torque_nm: r.torque_nm,
+          accel_0_100_s: r.accel_0_100_s !== null ? Number(r.accel_0_100_s) : null,
+          fuel_slug: r.fuel_slug,
+          body_type_en: r.body_type_en,
+          price_new_eur: r.price_new_eur,
+        })),
+      );
+      const next_cursor = rows.length === limit ? data[data.length - 1]!.variant_id : null;
+      return ok("filter_catalogue", { data, next_cursor });
+    },
+
+    async compare_full({ variant_ids, locale }: { variant_ids: string[]; locale?: string }) {
+      ctx.track("compare_full:paid", locale);
+      const ids = await Promise.all(variant_ids.map((t) => ctx.token("variant", t)));
+      const badAt = ids.findIndex((id) => id === null);
+      if (badAt !== -1) return failure({ error: `Not a valid variant id: ${variant_ids[badAt]}` });
+      const loc = resolveLocale(locale);
+      const results = await Promise.all((ids as number[]).map((id) => q.specs(loc, id)));
+      const missingAt = results.findIndex((r) => !r);
+      // One unknown id fails the whole call, unsettled — never a partial
+      // comparison sold as a whole one (the REST route's rule since 2026-10-04).
+      if (missingAt !== -1) return failure({ error: `No variant with id ${variant_ids[missingAt]}` });
+      return ok("compare_full", {
+        locale: loc,
+        data: variant_ids.map((token, i) => {
+          const r = results[i]!;
+          return { variant_id: token, ...r.summary, last_synced_at: r.last_synced_at.toISOString(), specs: r.specs };
+        }),
       });
     },
   };
@@ -515,4 +687,52 @@ export function registerPaidTools(server: McpServer, s: X402Settings, ctx: ToolC
   searchTool.outputSchema = OUTPUT.search_catalogue;
   specsTool.title = "Get full specs, any variant (paid)";
   specsTool.outputSchema = OUTPUT.get_specs_full;
+
+  // T334 — same four operations as the Apify Actor, same prices (owner
+  // decision 2026-10-16: one row of data, one price, whichever door).
+  const filterTool = paid.paidTool(
+    "filter_catalogue",
+    `Structured filter over all ${n(CATALOGUE.variants)} variants (not only the ${DEMO_SET_SIZE}-car demo): fuel, body, ` +
+      "drive layout, power/price range, model year, EV-only. Keyset-paginated; returns opaque variant_ids for " +
+      `get_specs_full / compare_full. Paid per call with x402 (USDC) — $${s.filterPriceUsd}.`,
+    s.filterPriceUsd,
+    {
+      fuel: z.string().optional().describe("Fuel slug, e.g. electric, petrol, diesel, hybrid"),
+      body: z.string().optional().describe("Body type slug, e.g. suv, hatchback, sedan"),
+      drive: z.string().optional().describe("Drive layout, substring match — front, rear, all"),
+      power_min: z.number().int().optional().describe("Minimum power, hp"),
+      power_max: z.number().int().optional().describe("Maximum power, hp"),
+      price_max: z.number().int().optional().describe("Maximum new list price, EUR"),
+      year: z.number().int().optional().describe("Production year the generation covers, e.g. 2022"),
+      ev: z.boolean().optional().describe("true = battery-electric variants only. Default: false"),
+      cursor: z.string().optional().describe("next_cursor of the previous page, to continue it"),
+      locale: localeParam,
+      limit: z.number().int().min(1).max(50).optional().describe("Page size, 1–50. Default: 24."),
+    },
+    annotations,
+    h.filter_catalogue,
+  );
+
+  const compareTool = paid.paidTool(
+    "compare_full",
+    `Side-by-side localized specs for 2-4 variants from ANYWHERE in the ${n(CATALOGUE.variants)}-variant catalogue, in ` +
+      `${CATALOGUE.locales} languages. Paid per call with x402 (USDC) — $${s.comparePriceUsd} flat for the call. ` +
+      "Not charged when an id is unknown.",
+    s.comparePriceUsd,
+    {
+      variant_ids: z
+        .array(z.string())
+        .min(2)
+        .max(4)
+        .describe("2 to 4 opaque variant ids from search_catalogue or filter_catalogue, e.g. ['v_1a2b3c4d', 'v_5e6f7a8b']"),
+      locale: localeParam,
+    },
+    annotations,
+    h.compare_full,
+  );
+
+  filterTool.title = "Filter the full catalogue (paid)";
+  filterTool.outputSchema = OUTPUT.filter_catalogue;
+  compareTool.title = "Compare any variants (paid)";
+  compareTool.outputSchema = OUTPUT.compare_full;
 }

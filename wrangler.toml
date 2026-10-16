@@ -30,6 +30,13 @@ compatibility_flags = ["nodejs_compat"]
 # Worker does NOT send yet. When the free plan runs out PayAI answers 403
 # `free_tier_exhausted`; the Worker then logs settle_failed with that reason
 # (T226) and serves nothing unpaid. Back to testnet: delete the two lines below.
+#
+# PRICES are the defaults in src/lib/x402-config.ts — specs $0.05, search
+# $0.005, filter $0.005, compare $0.10 — and the SAME four numbers are set by
+# hand in the Apify Console (T334, owner 2026-10-16: one row of data, one
+# price, whichever door). Override only with X402_PRICE_{SPECS,SEARCH,FILTER,
+# COMPARE}_USD here, and change the Apify Console in the same step, or the two
+# doors drift apart again — which is the defect T334 closed.
 [vars]
 X402_PAY_TO = "0x3866d32426a12db52e155563768bea9516bbab49"
 X402_NETWORK = "base"

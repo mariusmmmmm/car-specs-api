@@ -7,7 +7,7 @@ import { decodeId } from "./lib/public-id";
 import { encodeTree } from "./middleware/opaque-ids";
 import { readX402Config } from "./lib/x402-config";
 import { getDb } from "./lib/db";
-import { searchVariants } from "./lib/queries";
+import { filterVariants, searchVariants } from "./lib/queries";
 import { localizeVariantSpecs } from "./lib/localize-variant";
 import { registerDemoTools, registerPaidTools, type ToolContext, type Tokenized } from "./mcp-tools";
 
@@ -77,15 +77,17 @@ export class CarsDataMCP extends McpAgent<Env> {
       encode: <T>(value: T) => this.encode(value) as Promise<Tokenized<T>>,
       token: (kind, raw) => this.token(kind, raw),
     };
-    registerDemoTools(this.server, ctx);
-
     // Paid tools exist only when x402 is configured (T216). Unset X402_PAY_TO
-    // and this surface is byte-for-byte the demo one.
+    // and this surface is byte-for-byte the demo one — the demo tools then
+    // name the other two doors, not a paid tool that is not there (T334).
     const x402 = readX402Config(this.env);
+    registerDemoTools(this.server, ctx, x402);
+
     if (x402) {
       registerPaidTools(this.server, x402, ctx, {
         search: (locale, query, limit) => searchVariants(getDb(this.env), locale, query, limit, 0),
         specs: (locale, id) => localizeVariantSpecs(getDb(this.env), locale, id),
+        filter: (locale, f) => filterVariants(getDb(this.env), locale, f),
       });
     }
   }

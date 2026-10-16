@@ -37,6 +37,7 @@ Tools exposed:
 | `list_generations` | Generations/facelifts of a model, with production years |
 | `filter_cars` | Structured filter: fuel, body, drive, power/price range, year, EV-only |
 | `get_images` | Image URLs (own CDN) for a vehicle variant |
+| `search_catalogue` · `filter_catalogue` · `get_specs_full` · `compare_full` | The same four operations over the **full** catalogue, paid per call with x402 (T216, T334); every demo answer names its paid pair in `full_catalogue` |
 
 Every tool declares an `outputSchema` and is annotated read-only. A successful call returns the result as `structuredContent` and, for clients without structured output, the same object serialized in the text block. Lists come wrapped as `{ "data": [...] }` — the shape the REST envelope uses; until 2026-10 `search_cars`, `list_generations` and `get_images` returned a bare array. Errors are `isError: true` with `{ "error": "..." }` and no `structuredContent`.
 
@@ -124,17 +125,20 @@ There is **no free tier**. Two ways take a key; the third takes a payment.
 
 - **Paid** — arranged by hand, no instant checkout:
   - the [Apify Actor](https://apify.com/carsdatacom/car-specs-api) — the API
-    over the full catalogue, metered and billed per result by Apify;
+    over the full catalogue, metered and billed per event by Apify, at the
+    **same four prices as x402** (T334: one row of data, one price, whichever
+    door — set by hand in the Apify Console, kept there deliberately);
   - a **licensed data export** — the modules you need as CSV and JSON, with a
     field dictionary, a per-field coverage sheet and an optional update
     subscription. Module list, prices and terms are published on
     <https://cars-data.com/en/api>; nothing is quoted here that is not on that
     page.
 
-- **Pay per request, x402 (T216)** — no key, no account. `GET /v1/variants/:id/specs`
-  ($0.05) and `GET /v1/search` ($0.005) answer a keyless caller `402` with the
+- **Pay per request, x402 (T216, T334)** — no key, no account. `GET /v1/variants/:id/specs`
+  ($0.05), `GET /v1/search` ($0.005), `GET /v1/variants` ($0.005, the filter) and
+  `GET /v1/compare` ($0.10 flat) answer a keyless caller `402` with the
   price; an x402 client pays in USDC on Base and retries. Only a successful
-  response is settled. MCP has the same two as paid tools. **Live on Base
+  response is settled. MCP has the same four as paid tools. **Live on Base
   mainnet since 2026-10-11 (T231)**, settled through the PayAI facilitator; the
   switch is `X402_PAY_TO` in `wrangler.toml` — remove it and those routes
   answer `401` like every other (`src/lib/x402-config.ts`).

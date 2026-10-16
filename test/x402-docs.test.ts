@@ -1,6 +1,8 @@
 import { describe, test, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import {
+  DEFAULT_COMPARE_PRICE_USD,
+  DEFAULT_FILTER_PRICE_USD,
   DEFAULT_SEARCH_PRICE_USD,
   DEFAULT_SPECS_PRICE_USD,
   paidRoute,
@@ -28,6 +30,12 @@ describe("openapi ↔ x402 (T219)", () => {
   test("the prices in the spec are the Worker's defaults", () => {
     expect(yaml).toContain(`\`GET /variants/{id}/specs\` — $${DEFAULT_SPECS_PRICE_USD}`);
     expect(yaml).toContain(`\`GET /search\` — $${DEFAULT_SEARCH_PRICE_USD}`);
+    // T334 — the two the Apify Actor sold; the README quotes the same four.
+    expect(yaml).toContain(`\`GET /variants\` — $${DEFAULT_FILTER_PRICE_USD}`);
+    expect(yaml).toContain(`\`GET /compare\` — $${DEFAULT_COMPARE_PRICE_USD}`);
+    const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+    expect(readme).toContain(`\`GET /v1/variants\` ($${DEFAULT_FILTER_PRICE_USD}`);
+    expect(readme).toContain(`\`GET /v1/compare\` ($${DEFAULT_COMPARE_PRICE_USD.toFixed(2)}`);
     // the worked atomic-unit example must be the specs price in USDC (6 decimals)
     expect(yaml).toContain(`$${DEFAULT_SPECS_PRICE_USD} is \`${Math.round(DEFAULT_SPECS_PRICE_USD * 1e6)}\``);
   });
@@ -43,6 +51,6 @@ describe("openapi ↔ x402 (T219)", () => {
       }
     }
     expect([...documented].sort()).toEqual([...allowlisted].sort());
-    expect(documented.size).toBe(2);
+    expect(documented.size).toBe(4);
   });
 });

@@ -77,6 +77,14 @@ const x402 = {
   facilitatorUrl: "https://x402.org/facilitator",
   specsPriceUsd: 0.05,
   searchPriceUsd: 0.01,
+  filterPriceUsd: 0.005,
+  comparePriceUsd: 0.1,
+};
+
+const FILTER_ROW = {
+  variant_id: 2000, generation_id: 700, display_name: "BMW i3 A", power_hp: 170, battery_kwh: "42.2",
+  top_speed_kmh: 150, torque_nm: 250, accel_0_100_s: "7.3", fuel_slug: "electric", body_type_en: "Hatchback",
+  price_new_eur: 39000, last_synced_at: new Date("2026-10-10T00:00:00Z"),
 };
 
 const paidQueries = {
@@ -95,6 +103,9 @@ const paidQueries = {
           },
         } as never)
       : null,
+  // T334 — a page of exactly `limit` rows, so next_cursor is exercised.
+  filter: async (_l: string, f: { limit?: number }) =>
+    Array.from({ length: f.limit ?? 24 }, (_, i) => ({ ...FILTER_ROW, variant_id: 2000 + i })) as never,
 };
 
 type ListedTool = {
@@ -111,7 +122,7 @@ let tools: ListedTool[];
 
 beforeAll(async () => {
   const server = new McpServer({ name: "cars-data-specs", version: "test" });
-  registerDemoTools(server, ctx);
+  registerDemoTools(server, ctx, x402);
   registerPaidTools(server, x402, ctx, paidQueries);
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(a);
@@ -121,15 +132,57 @@ beforeAll(async () => {
 });
 
 const DEMO = ["search_cars", "get_specs", "compare_variants", "list_generations", "filter_cars", "get_images"];
-const PAID = ["search_catalogue", "get_specs_full"];
+const PAID = ["search_catalogue", "get_specs_full", "filter_catalogue", "compare_full"];
 
 type CallResult = { isError?: boolean; structuredContent?: Record<string, unknown>; content: { text: string }[] };
 const call = async (name: string, args: Record<string, unknown>) =>
   (await client.callTool({ name, arguments: args })) as unknown as CallResult;
 
 describe("tools/list — the metadata a directory scores (T286)", () => {
-  test("all eight tools are listed", () => {
+  test("all ten tools are listed", () => {
     expect(tools.map((t) => t.name).sort()).toEqual([...DEMO, ...PAID].sort());
+  });
+
+  // T334 — the demo is the shop window; its description must name the door
+  // that opens, with the price, not the export an agent cannot buy.
+  test.each([
+    ["search_cars", "search_catalogue", x402.searchPriceUsd],
+    ["get_specs", "get_specs_full", x402.specsPriceUsd],
+    ["compare_variants", "compare_full", x402.comparePriceUsd],
+    ["filter_cars", "filter_catalogue", x402.filterPriceUsd],
+  ])("%s names its paid pair %s and its price", (demoTool, paidTool, price) => {
+    const d = tools.find((t) => t.name === demoTool)!.description!;
+    expect(d).toContain(paidTool);
+    expect(d).toContain(`$${price}`);
+    expect(d).toContain("x402");
+    expect(d).not.toMatch(/licensed export\.$/);
+  });
+
+  test("the demo tools without a paid pair still name all three doors", () => {
+    for (const name of ["list_generations", "get_images"]) {
+      const d = tools.find((t) => t.name === name)!.description!;
+      expect(d).toContain("x402");
+      expect(d).toContain("apify.com/carsdatacom/car-specs-api");
+      expect(d).toContain("cars-data.com/en/api");
+    }
+  });
+
+  test("with x402 OFF the demo names the other two doors and NO paid tool", async () => {
+    const server = new McpServer({ name: "off", version: "test" });
+    registerDemoTools(server, ctx);
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await server.connect(a);
+    const c = new Client({ name: "off", version: "1" });
+    await c.connect(b);
+    const listed = (await c.listTools()).tools as ListedTool[];
+    expect(listed.map((t) => t.name).sort()).toEqual([...DEMO].sort());
+    for (const t of listed) {
+      expect(t.description).not.toContain("search_catalogue");
+      expect(t.description).not.toContain("get_specs_full");
+      expect(t.description).toContain("apify.com/carsdatacom/car-specs-api");
+    }
+    const r = (await c.callTool({ name: "search_cars", arguments: { query: "i3" } })) as unknown as CallResult;
+    expect(r.structuredContent!.full_catalogue).toBeUndefined();
   });
 
   test("every parameter of every tool carries a description", () => {
@@ -185,6 +238,17 @@ describe("demo tools honour their outputSchema (validated by server zod AND clie
     expect(JSON.parse(r.content[0].text)).toEqual(r.structuredContent);
     return r.structuredContent as Record<string, any>;
   };
+
+  test("a demo answer carries full_catalogue naming the paid pair and its price (T334)", async () => {
+    const r = await call("search_cars", { query: "i3" });
+    expect(r.isError).toBeFalsy();
+    expect(r.structuredContent!.full_catalogue).toContain("search_catalogue");
+    expect(r.structuredContent!.full_catalogue).toContain(`$${x402.searchPriceUsd}`);
+    const f = await call("filter_cars", { fuel: "electric" });
+    expect(f.structuredContent!.full_catalogue).toContain("filter_catalogue");
+    const g = await call("get_images", { variant_id: await encodeId(SECRET, "variant", 2000) });
+    expect(g.structuredContent!.full_catalogue).toBeUndefined();
+  });
 
   test("search_cars → { data: [...] } with opaque ids", async () => {
     const out = ok(await call("search_cars", { query: "focus" }));
@@ -254,6 +318,39 @@ describe("paid tools honour their outputSchema (callbacks run directly — no pa
   test("unknown id is an error (not settled), not a schema violation", async () => {
     const r = await h.get_specs_full({ variant_id: await encodeId(SECRET, "variant", 5) });
     expect(r.isError).toBe(true);
+  });
+
+  // T334
+  test("filter_catalogue: opaque ids, numeric decimals, a cursor that is the last row's token", async () => {
+    const r = await h.filter_catalogue({ fuel: "electric", limit: 3 });
+    expect(r.isError).toBeFalsy();
+    const sc = (r as { structuredContent: Record<string, any> }).structuredContent;
+    expect(OUTPUT.filter_catalogue.safeParse(sc).success).toBe(true);
+    ajvCheck("filter_catalogue", sc);
+    expect(sc.data).toHaveLength(3);
+    expect(sc.data[0].variant_id).toMatch(/^v_/);
+    expect(sc.data[0].battery_kwh).toBe(42.2);
+    expect(sc.data[0].accel_0_100_s).toBe(7.3);
+    expect(sc.next_cursor).toBe(sc.data[2].variant_id);
+    expect(await decodeId(SECRET, "variant", sc.next_cursor)).toBe(2002);
+    expect(JSON.stringify(sc)).not.toMatch(/\b200[0-9]\b/);
+    // a garbage cursor is an error, never a silent restart from page one
+    expect((await h.filter_catalogue({ cursor: "v_nope" })).isError).toBe(true);
+  });
+
+  test("compare_full: one unknown id fails the whole call (unsettled), never a partial comparison", async () => {
+    const a = await encodeId(SECRET, "variant", 2000);
+    const ok = await h.compare_full({ variant_ids: [a, a], locale: "de" });
+    expect(ok.isError).toBeFalsy();
+    const sc = (ok as { structuredContent: Record<string, any> }).structuredContent;
+    expect(OUTPUT.compare_full.safeParse(sc).success).toBe(true);
+    ajvCheck("compare_full", sc);
+    expect(sc.locale).toBe("de");
+    expect(sc.data).toHaveLength(2);
+    expect(sc.data[1].torque_nm).toBe(250);
+    expect(sc.data[1].last_synced_at).toBe("2026-10-10T00:00:00.000Z");
+    const bad = await h.compare_full({ variant_ids: [a, await encodeId(SECRET, "variant", 5)] });
+    expect(bad.isError).toBe(true);
   });
 });
 
