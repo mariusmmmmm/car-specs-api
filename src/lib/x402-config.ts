@@ -39,6 +39,21 @@ const TESTNETS: ReadonlySet<string> = new Set(["eip155:84532"]);
 // unmetered read path into the database.
 export const DEFAULT_SPECS_PRICE_USD = 0.05;
 export const DEFAULT_SEARCH_PRICE_USD = 0.005;
+// T334 — the other two operations the Apify Actor sells, priced here too, so
+// every door sells the same four things at the same price. Filter is search
+// with structured inputs: identity rows, the same data, the same price.
+// Compare returns 2-4 full spec sets in one call; a flat price above one
+// specs call and below four keeps it a convenience, not a discount channel.
+export const DEFAULT_FILTER_PRICE_USD = 0.005;
+export const DEFAULT_COMPARE_PRICE_USD = 0.1;
+
+// One row of data has ONE price, whichever door it comes through (T334, owner
+// decision 2026-10-16). Until then the Apify Actor listed the same specs
+// lookup at $0.003 — 17x under this door and 6x under the export's per-variant
+// price — so an agent that compared never chose x402, and a buyer of the
+// €1,900 export could walk the catalogue through Apify for ~$310. The Apify
+// Console prices are set by hand to the four defaults above; a test in
+// test/x402-docs.test.ts keeps the published docs on them.
 
 // Bounds. Below 0.001 a USDC amount stops being meaningful against facilitator
 // and gas economics; above 100 is not a per-request price, it is a typo.
@@ -51,6 +66,8 @@ export type X402Settings = {
   facilitatorUrl: string;
   specsPriceUsd: number;
   searchPriceUsd: number;
+  filterPriceUsd: number;
+  comparePriceUsd: number;
 };
 
 export type X402Env = {
@@ -59,6 +76,8 @@ export type X402Env = {
   X402_FACILITATOR_URL?: string;
   X402_PRICE_SPECS_USD?: string;
   X402_PRICE_SEARCH_USD?: string;
+  X402_PRICE_FILTER_USD?: string;
+  X402_PRICE_COMPARE_USD?: string;
 };
 
 export type X402ConfigResult =
@@ -106,7 +125,9 @@ export function parseX402Config(env: X402Env): X402ConfigResult {
 
   const specsPriceUsd = price(env.X402_PRICE_SPECS_USD, DEFAULT_SPECS_PRICE_USD);
   const searchPriceUsd = price(env.X402_PRICE_SEARCH_USD, DEFAULT_SEARCH_PRICE_USD);
-  if (specsPriceUsd === null || searchPriceUsd === null) {
+  const filterPriceUsd = price(env.X402_PRICE_FILTER_USD, DEFAULT_FILTER_PRICE_USD);
+  const comparePriceUsd = price(env.X402_PRICE_COMPARE_USD, DEFAULT_COMPARE_PRICE_USD);
+  if (specsPriceUsd === null || searchPriceUsd === null || filterPriceUsd === null || comparePriceUsd === null) {
     return {
       ok: false,
       reason: "invalid",
@@ -116,7 +137,15 @@ export function parseX402Config(env: X402Env): X402ConfigResult {
 
   return {
     ok: true,
-    settings: { payTo: payTo as `0x${string}`, network, facilitatorUrl, specsPriceUsd, searchPriceUsd },
+    settings: {
+      payTo: payTo as `0x${string}`,
+      network,
+      facilitatorUrl,
+      specsPriceUsd,
+      searchPriceUsd,
+      filterPriceUsd,
+      comparePriceUsd,
+    },
   };
 }
 
@@ -166,6 +195,25 @@ export function paidRoute(
       label: "/v1/search",
       priceUsd: s.searchPriceUsd,
       description: "Search the cars-data.com catalogue; returns variant ids to pass to /v1/variants/{id}/specs.",
+    };
+  }
+  // T334 — the two operations that until now answered 401 to a keyless caller
+  // while the Apify Actor sold them. `/variants` exactly: `/variants/:id` and
+  // its sub-routes are NOT for sale here (the plain variant and its images stay
+  // a key-holder's), and the regex is anchored so they cannot match.
+  if (/^(?:\/v1)?\/variants\/?$/.test(path)) {
+    return {
+      label: "/v1/variants",
+      priceUsd: s.filterPriceUsd,
+      description:
+        "Filter the cars-data.com catalogue by fuel, body, drive, power, price, year or EV-only; returns variant ids to pass to /v1/variants/{id}/specs.",
+    };
+  }
+  if (/^(?:\/v1)?\/compare\/?$/.test(path)) {
+    return {
+      label: "/v1/compare",
+      priceUsd: s.comparePriceUsd,
+      description: "Side-by-side localized specifications for 2-4 vehicle variants (cars-data.com).",
     };
   }
   return null;

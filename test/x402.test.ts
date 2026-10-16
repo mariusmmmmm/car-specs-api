@@ -180,6 +180,14 @@ describe("config — the address is the switch", () => {
     const r = parseX402Config({ X402_PAY_TO: PAY_TO });
     expect(r.ok && r.settings.specsPriceUsd).toBe(0.05);
     expect(r.ok && r.settings.searchPriceUsd).toBe(0.005);
+    // T334 — the two the Apify Actor sold; filter = search with structured
+    // inputs, compare = a flat price between one and four specs calls.
+    expect(r.ok && r.settings.filterPriceUsd).toBe(0.005);
+    expect(r.ok && r.settings.comparePriceUsd).toBe(0.1);
+    expect(r.ok && r.settings.comparePriceUsd).toBeGreaterThan(0.05);
+    expect(r.ok && r.settings.comparePriceUsd).toBeLessThan(4 * 0.05);
+    expect(parseX402Config({ X402_PAY_TO: PAY_TO, X402_PRICE_COMPARE_USD: "abc" })).toMatchObject({ ok: false });
+    expect(parseX402Config({ X402_PAY_TO: PAY_TO, X402_PRICE_FILTER_USD: "0" })).toMatchObject({ ok: false });
     // €2,900 Full Specs / ~103k variants ≈ €0.028 — the default must not undercut it.
     expect(r.ok && r.settings.specsPriceUsd).toBeGreaterThan(2900 / 103_000);
     for (const bad of ["0", "0.0001", "abc", "-1", "1e-3", "101"]) {
@@ -203,10 +211,17 @@ describe("allowlist — only named routes are for sale", () => {
     ["OPTIONS", "/v1/search", false],
     ["GET", "/v1/variants/v_1a2b3c4d", false],
     ["GET", "/v1/variants/v_1a2b3c4d/images", false],
-    ["GET", "/v1/variants", false],
+    ["GET", "/v1/variants/v_1a2b3c4d/prices", false],
+    // T334 — the filter and the comparison joined the allowlist …
+    ["GET", "/v1/variants", true],
+    ["GET", "/v1/variants/", true],
+    ["GET", "/v1/compare", true],
+    ["HEAD", "/v1/compare", true],
+    ["POST", "/v1/compare", false],
+    // … and nothing else did.
     ["GET", "/v1/export", false],
-    ["GET", "/v1/compare", false],
     ["GET", "/v1/usage", false],
+    ["GET", "/v1/brands", false],
   ])("%s %s → paid=%s", (method, path, expected) => {
     expect(paidRoute(method, path, s) !== null).toBe(expected);
   });
@@ -251,6 +266,36 @@ describe("REST — x402 ON", () => {
     expect(res.status).toBe(402);
     const a = decodePaymentRequiredHeader(res.headers.get("PAYMENT-REQUIRED")!).accepts[0]!;
     expect(a.amount).toBe("5000"); // $0.005
+  });
+
+  // T334 — until now these two answered 401 to a keyless caller while the Apify
+  // Actor sold them for $0.003. Same four operations, same prices, every door.
+  test("the filter is for sale at the search price; database untouched on the challenge", async () => {
+    const res = await get("/v1/variants?fuel=electric&power_min=150", env(ON));
+    expect(res.status).toBe(402);
+    const a = decodePaymentRequiredHeader(res.headers.get("PAYMENT-REQUIRED")!).accepts[0]!;
+    expect(a.amount).toBe("5000"); // $0.005
+    expect(db.touched).toBe(0);
+    const body = (await res.json()) as { detail: string };
+    expect(body.detail).toContain("$0.005");
+    expect(body.detail).toContain("apify.com/carsdatacom/car-specs-api");
+  });
+
+  test("compare is for sale at a flat $0.10, however many cars", async () => {
+    const two = `${await encodeId(SECRET, "variant", VARIANT)},${await encodeId(SECRET, "variant", VARIANT + 1)}`;
+    const res = await get(`/v1/compare?ids=${two}`, env(ON));
+    expect(res.status).toBe(402);
+    const a = decodePaymentRequiredHeader(res.headers.get("PAYMENT-REQUIRED")!).accepts[0]!;
+    expect(a.amount).toBe("100000"); // $0.10
+  });
+
+  test("a paid comparison that names a car that is not there → 404 and NO settlement", async () => {
+    const e = env(ON);
+    const path = `/v1/compare?ids=${await encodeId(SECRET, "variant", VARIANT)},${await encodeId(SECRET, "variant", 999_999)}`;
+    const payment = await paymentFor(path, e);
+    const res = await get(path, e, { "PAYMENT-SIGNATURE": payment });
+    expect(res.status).toBe(404);
+    expect(calls.settle).toBe(0);
   });
 
   test("a PRESENTED key — even an invalid one — is never turned into a payment prompt", async () => {

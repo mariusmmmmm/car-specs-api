@@ -117,8 +117,71 @@ const SEARCH_EXAMPLE = {
   links: { next: "c_9a8b7c6d" },
 };
 const LOCALES = ["ar", "bg", "cs", "da", "de", "el", "en", "es", "fr", "hr", "hu", "it", "no", "pl", "pt", "ro", "sk", "sr", "sv", "tr"];
+// T334 — the two routes that joined the allowlist, declared the same way.
+const FILTER_EXAMPLE = {
+  data: [
+    {
+      variant_id: "v_1a2b3c4d",
+      generation_id: "g_5e6f7a8b",
+      display_name: "ID.3 Pro 58 kWh 204hp",
+      power_hp: 204,
+      battery_kwh: 58,
+      top_speed_kmh: 160,
+      torque_nm: 310,
+      accel_0_100_s: 7.3,
+      fuel_slug: "electric",
+      body_type_en: "Hatchback",
+      price_new_eur: 39990,
+    },
+  ],
+  meta: { locale: "en", last_synced_at: "2026-10-13T00:00:00.000Z" },
+  links: { next: "c_9a8b7c6d" },
+};
+const COMPARE_EXAMPLE = {
+  data: [
+    { variant_id: "v_1a2b3c4d", locale: "en", display_name: "Golf 1.5 eTSI 150hp Style", specs: SPECS_EXAMPLE.data.specs },
+    { variant_id: "v_5e6f7a8b", locale: "en", display_name: "Golf 2.0 TDI 150hp Style", specs: SPECS_EXAMPLE.data.specs },
+  ],
+  meta: { locale: "en", last_synced_at: "2026-10-01T00:00:00.000Z" },
+};
 
 function discovery(label: string) {
+  if (label === "/v1/variants") {
+    return declareDiscoveryExtension({
+      input: { fuel: "electric", power_min: 150, locale: "en", limit: 10 },
+      inputSchema: {
+        type: "object",
+        properties: {
+          fuel: { type: "string", description: "Fuel slug, e.g. electric, petrol, diesel, hybrid" },
+          body: { type: "string", description: "Body type slug, e.g. suv, hatchback" },
+          drive: { type: "string", description: "Drive layout, substring match: front, rear, all" },
+          power_min: { type: "integer", description: "Minimum power, hp" },
+          power_max: { type: "integer", description: "Maximum power, hp" },
+          price_max: { type: "integer", description: "Maximum new list price, EUR" },
+          year: { type: "integer", description: "Production year the generation covers" },
+          ev: { type: "boolean", description: "true = battery-electric only" },
+          locale: { type: "string", enum: LOCALES, default: "en" },
+          limit: { type: "integer", minimum: 1, maximum: 50, default: 24 },
+          cursor: { type: "string", description: "links.next of the previous page" },
+        },
+      },
+      output: { example: FILTER_EXAMPLE },
+    });
+  }
+  if (label === "/v1/compare") {
+    return declareDiscoveryExtension({
+      input: { ids: "v_1a2b3c4d,v_5e6f7a8b", locale: "en" },
+      inputSchema: {
+        type: "object",
+        properties: {
+          ids: { type: "string", description: "2-4 opaque variant ids (v_…) from /v1/search or /v1/variants, comma-separated" },
+          locale: { type: "string", enum: LOCALES, default: "en" },
+        },
+        required: ["ids"],
+      },
+      output: { example: COMPARE_EXAMPLE },
+    });
+  }
   if (label === "/v1/search") {
     return declareDiscoveryExtension({
       input: { q: "golf", locale: "en", limit: 10 },
@@ -195,7 +258,9 @@ function routeEntry(
         status: 402,
         detail:
           `This request costs $${route.priceUsd} in USDC via x402 — the terms are in the PAYMENT-REQUIRED header. ` +
-          "Alternatively send an API key. Docs and licensing: https://cars-data.com/en/api",
+          "Alternatively send an API key. The same operation at the same price is on the Apify Actor " +
+          "(https://apify.com/carsdatacom/car-specs-api); the whole database is a licensed export (https://cars-data.com/en/api). " +
+          "Docs: https://cars-data.com/en/api/for-ai-agents",
       },
     }),
   };

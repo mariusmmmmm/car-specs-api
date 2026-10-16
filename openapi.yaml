@@ -63,10 +63,11 @@ info:
 
     ## 3. Pay per request — x402, no key
 
-    Two endpoints answer a caller that sends **no key** with
+    Four endpoints answer a caller that sends **no key** with
     `402 Payment Required` and the price, under the
-    [x402](https://x402.org) v2 protocol: `GET /variants/{id}/specs` — $0.05 —
-    and `GET /search` — $0.005. The `PAYMENT-REQUIRED` response header is
+    [x402](https://x402.org) v2 protocol: `GET /variants/{id}/specs` — $0.05,
+    `GET /search` — $0.005, `GET /variants` — $0.005 (the filter) and
+    `GET /compare` — $0.1 flat for the call. The `PAYMENT-REQUIRED` header is
     base64 JSON naming the scheme (`exact`), the network (Base,
     `eip155:8453`), the asset (USDC), the amount in atomic units and the
     recipient; the header, not this text, is what binds.
@@ -80,9 +81,12 @@ info:
     No account, no key, no quota. A per-network limit of 60 requests a minute
     protects the service and answers `429` above it. A request that DOES send
     a key never gets a `402` — it is answered as a key holder, valid or not.
-    The MCP server offers the same two as paid tools, `search_catalogue` and
-    `get_specs_full`. Paying per request does not license harvesting: bulk
-    access is the licensed export (Terms, A3 and A5).
+    The MCP server offers the same four as paid tools: `search_catalogue`,
+    `filter_catalogue`, `get_specs_full` and `compare_full`. **One row of data
+    has one price, whichever door**: the Apify Actor sells these same four
+    operations at these same prices, billed by Apify. Paying per request does
+    not license harvesting: bulk access is the licensed export (Terms, A3 and
+    A5).
 
     # Conventions
 
@@ -475,10 +479,16 @@ paths:
 
         Not part of the demo tier.
       operationId: filterVariants
+      # A key, or no key and an x402 payment (see "Pay per request" above).
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+        - {}
       parameters:
         - $ref: '#/components/parameters/Locale'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/PaymentSignature'
         - name: fuel
           in: query
           description: Fuel slug, e.g. `benzine`, `elektrisch`.
@@ -513,12 +523,15 @@ paths:
           schema: { type: boolean }
       responses:
         '200':
-          description: OK
+          description: OK. Paid with x402, it also carries `PAYMENT-RESPONSE`.
+          headers:
+            PAYMENT-RESPONSE: { $ref: '#/components/headers/PaymentResponse' }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariantListEnvelope'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -674,8 +687,14 @@ paths:
         Ids are decoded strictly: one unreadable token fails the whole call
         with `400`, rather than quietly comparing the cars that did parse.
 
-        Available in the demo tier, for cars inside the 40.
+        Available in the demo tier, for cars inside the 40. Paid with x402, the
+        price is flat for the call, however many of the 2–4 cars you compare.
       operationId: compareVariants
+      # A key, or no key and an x402 payment (see "Pay per request" above).
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+        - {}
       parameters:
         - name: ids
           in: query
@@ -683,9 +702,12 @@ paths:
           description: 2–4 opaque variant tokens, comma-separated.
           schema: { type: string, example: "v_1a2b3c4d,v_5e6f7a8b" }
         - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/PaymentSignature'
       responses:
         '200':
-          description: OK
+          description: OK. Paid with x402, it also carries `PAYMENT-RESPONSE`.
+          headers:
+            PAYMENT-RESPONSE: { $ref: '#/components/headers/PaymentResponse' }
           content:
             application/json:
               schema:
@@ -694,6 +716,7 @@ paths:
           description: Missing `ids`, fewer than 2 or more than 4, or one of them is not a valid variant token.
           $ref: '#/components/responses/Problem'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '403':
           description: On a demo key, at least one of the cars is outside the demo set.
           $ref: '#/components/responses/Problem'

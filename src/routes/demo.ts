@@ -5,6 +5,8 @@ import { resolveLocale } from "../lib/locale";
 import { demoSetReady, DEMO_SET_DESCRIPTION } from "../lib/demo-set";
 import { loadDemoPayload, type DemoPayload, type DemoVariant } from "../lib/demo-payload";
 import { encodeId, decodeId } from "../lib/public-id";
+import { readX402Config } from "../lib/x402-config";
+import { doors, doorsSentence } from "../lib/doors";
 
 // Everything a demo key can reach (T111). Mounted AHEAD of the database routes
 // and short-circuits them, so a demo request never receives a Postgres
@@ -12,8 +14,12 @@ import { encodeId, decodeId } from "../lib/public-id";
 // 40 cars and there is no code path from here to anything else.
 export const demo = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-const UPGRADE =
-  "The demo covers 40 cars — the only self-serve tier. The full catalogue is a licensed export: https://cars-data.com/en/api";
+/** What a demo caller reads when it reaches the edge of the 40 cars (T334):
+ *  the three doors, x402 first while it is on. x402-config is pure — reading
+ *  it here opens nothing; this module still never sees a database. */
+function upgrade(env: Env): string {
+  return `The demo covers 40 cars — the only self-serve tier. ${doorsSentence(readX402Config(env))}`;
+}
 
 /** 503, not 404 or an empty list. A demo that answers "no cars" to whoever is
  *  evaluating us reads as a broken catalogue, and that is the one impression
@@ -27,8 +33,8 @@ function unavailable(c: { json: (b: unknown, s: number, h: Record<string, string
   return c.json(body, status, { ...headers, "Retry-After": "300" });
 }
 
-function outsideSet(c: { json: (b: unknown, s: number, h: Record<string, string>) => Response }) {
-  const { body, status, headers } = problem(403, "Forbidden", `This car is outside the demo set. ${UPGRADE}`);
+function outsideSet(c: { env: Env; json: (b: unknown, s: number, h: Record<string, string>) => Response }) {
+  const { body, status, headers } = problem(403, "Forbidden", `This car is outside the demo set. ${upgrade(c.env)}`);
   return c.json(body, status, headers);
 }
 
@@ -71,7 +77,10 @@ demo.get("/demo", async (c) => {
         variant_count: payload.variants.length,
         fuels: [...new Set(payload.variants.map((v) => v.fuel))].sort(),
         variants: await Promise.all(payload.variants.map((v) => row(c.env, v))),
-        upgrade: UPGRADE,
+        upgrade: upgrade(c.env),
+        // The same three doors, structured (T334): which one is for whom,
+        // how it is paid, where it is. x402 appears only while it is on.
+        next_steps: doors(readX402Config(c.env)),
       },
       { locale, last_synced_at: payload.built_at },
     ),
@@ -160,7 +169,7 @@ demo.get("/search", async (c) => {
     envelope(await Promise.all(hits.map((v) => row(c.env, v))), {
       locale,
       last_synced_at: payload.built_at,
-      demo_note: hits.length === 0 ? `No match inside the demo set. ${UPGRADE}` : undefined,
+      demo_note: hits.length === 0 ? `No match inside the demo set. ${upgrade(c.env)}` : undefined,
     }),
   );
 });
@@ -190,7 +199,7 @@ demo.all("*", async (c) => {
   const { body, status, headers } = problem(
     403,
     "Forbidden",
-    `${c.req.path} is not part of the demo tier. ${UPGRADE}`,
+    `${c.req.path} is not part of the demo tier. ${upgrade(c.env)}`,
   );
   return c.json(body, status, headers);
 });

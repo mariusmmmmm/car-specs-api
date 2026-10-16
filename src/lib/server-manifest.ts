@@ -20,6 +20,12 @@
 // turns that rejection into a failing test, here, before anyone types
 // `mcp-publisher publish`.
 import { CATALOGUE, n } from "./catalogue-facts";
+import {
+  DEFAULT_COMPARE_PRICE_USD,
+  DEFAULT_FILTER_PRICE_USD,
+  DEFAULT_SEARCH_PRICE_USD,
+  DEFAULT_SPECS_PRICE_USD,
+} from "./x402-config";
 
 /** From the published schema, 2025-12-11 (definitions.ServerDetail). Exceeding
  *  either is a publish-time rejection, which is the slowest place to find out. */
@@ -35,7 +41,7 @@ export const MANIFEST_LIMITS = { description: 100, title: 100 } as const;
  *  and one in the registry. This repo has paid for that shape before: a
  *  TOS_VERSION string was recorded on live keys while the page still published
  *  the previous one, twice. A version means one artifact. */
-export const MANIFEST_VERSION = "1.0.4";
+export const MANIFEST_VERSION = "1.0.5";
 
 /** What an agent is told before it has called anything.
  *
@@ -65,8 +71,10 @@ function authorizationHeaderDescription(): string {
     "Bearer <your cars-data.com API key> — OPTIONAL. " +
     "Without it this server answers a fixed 40-car demo (every spec, every photo, " +
     `${CATALOGUE.locales} languages); a demo key, issued in one click, covers the same 40 cars over REST. ` +
-    `Two tools reach the full ${n(CATALOGUE.variants)}-variant catalogue with no key and no account at all, ` +
-    "paid per call under x402 v2 on Base (USDC): search_catalogue $0.005 and get_specs_full $0.05. " +
+    `Four tools reach the full ${n(CATALOGUE.variants)}-variant catalogue with no key and no account at all, ` +
+    `paid per call under x402 v2 on Base (USDC): search_catalogue $${DEFAULT_SEARCH_PRICE_USD}, ` +
+    `filter_catalogue $${DEFAULT_FILTER_PRICE_USD}, get_specs_full $${DEFAULT_SPECS_PRICE_USD} and ` +
+    `compare_full $${DEFAULT_COMPARE_PRICE_USD} — the same four operations at the same prices as the Apify Actor. ` +
     "Keys and licensed exports: https://cars-data.com/en/api/for-ai-agents"
   );
 }
