@@ -44,7 +44,13 @@ export function doors(x402: X402Settings | null): Door[] {
   out.push({
     door: "apify",
     for: "an Apify account — datasets, no-code runs, Apify's own MCP",
-    how: "the same four operations at the same prices, billed per event by Apify",
+    // No price here, and no claim that it matches x402's. The owner decided on
+    // 2026-10-16 that it should (one row of data, one price, whichever door),
+    // but the Apify Console refuses any price change until 2026-10-23, so until
+    // then the Actor is cheaper and saying otherwise would publish a price
+    // Apify does not charge. The prices live on the Store page; T335 restores
+    // the claim here once the Console matches.
+    how: "the same four operations, billed per event by Apify",
     url: APIFY_URL,
   });
   out.push({
@@ -66,7 +72,7 @@ export function doorsSentence(x402: X402Settings | null): string {
         `/v1/search $${x402.searchPriceUsd}, /v1/variants $${x402.filterPriceUsd}, /v1/compare $${x402.comparePriceUsd}, USDC on Base)`,
     );
   }
-  parts.push(`the Apify Actor at the same prices (${APIFY_URL})`);
+  parts.push(`the Apify Actor, billed per event by Apify (${APIFY_URL})`);
   parts.push(`the whole database as a licensed export (${EXPORT_URL})`);
   const last = parts.pop();
   return `Full catalogue: ${parts.join("; ")}; or ${last}.`;

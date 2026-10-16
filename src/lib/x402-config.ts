@@ -47,13 +47,16 @@ export const DEFAULT_SEARCH_PRICE_USD = 0.005;
 export const DEFAULT_FILTER_PRICE_USD = 0.005;
 export const DEFAULT_COMPARE_PRICE_USD = 0.1;
 
-// One row of data has ONE price, whichever door it comes through (T334, owner
-// decision 2026-10-16). Until then the Apify Actor listed the same specs
-// lookup at $0.003 — 17x under this door and 6x under the export's per-variant
-// price — so an agent that compared never chose x402, and a buyer of the
-// €1,900 export could walk the catalogue through Apify for ~$310. The Apify
-// Console prices are set by hand to the four defaults above; a test in
-// test/x402-docs.test.ts keeps the published docs on them.
+// One row of data should have ONE price, whichever door it comes through —
+// the owner's decision of 2026-10-16. It is not true YET, and no user-facing
+// string here says it is. Measured in the Apify Console that day: search,
+// spec-lookup and filter are $3.00/1,000 and compare $6.00/1,000, with a
+// change to spec-lookup ($10.00/1,000) already scheduled for 2026-10-23 — and
+// the Console refuses any further change until that date. So the Actor sells
+// a specs lookup for $0.003 against $0.05 here: 17x under this door and 6x
+// under the export's per-variant price, which is why an agent that compared
+// never chose x402. T335 sets the Console to these four numbers on 2026-10-23
+// and restores the parity sentences in the docs and on the site.
 
 // Bounds. Below 0.001 a USDC amount stops being meaningful against facilitator
 // and gas economics; above 100 is not a per-request price, it is a typo.

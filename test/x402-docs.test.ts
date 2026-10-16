@@ -1,5 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { doors, doorsSentence } from "../src/lib/doors";
+import { buildManifest } from "../src/lib/server-manifest";
 import {
   DEFAULT_COMPARE_PRICE_USD,
   DEFAULT_FILTER_PRICE_USD,
@@ -25,6 +27,63 @@ const settings = (parseX402Config({ X402_PAY_TO: "0x1111111111111111111111111111
   ok: true;
   settings: never;
 }).settings;
+
+// T334 variant B — no surface claims the Apify Actor charges what we charge.
+//
+// It SHOULD, by the owner's decision of 2026-10-16, and it will: T335 sets the
+// Apify Console to these four prices on 2026-10-23, the first date the Console
+// allows a change (measured there: it refuses one until then, with a different
+// change already scheduled). Until that happens the Actor sells a specs lookup
+// at $0.003 against $0.05 here, so a sentence saying the prices match would
+// publish a price Apify does not charge — the exact defect T334 exists to
+// close, inverted. This test fails the day such a sentence comes back before
+// its price does. When T335 lands, it is deleted in the same commit.
+describe("no premature price-parity claim (T334 variant B)", () => {
+  const PARITY = /(same|identical)[^.\n]{0,40}pric|one price,? which(ever)? door|at (the )?same prices/i;
+  const surfaces: [string, string][] = [
+    ["README.md", readFileSync(new URL("../README.md", import.meta.url), "utf8")],
+    ["openapi.yaml", yaml],
+    ["doors.ts", readFileSync(new URL("../src/lib/doors.ts", import.meta.url), "utf8")],
+    ["x402.ts", readFileSync(new URL("../src/middleware/x402.ts", import.meta.url), "utf8")],
+    ["server-manifest.ts", readFileSync(new URL("../src/lib/server-manifest.ts", import.meta.url), "utf8")],
+  ];
+
+  // Comments may state the INTENT, with its date; strings served to a caller
+  // may not. So the check reads the strings, not the files: every door text
+  // doors.ts actually produces, and the manifest's published description.
+  test("no door text promises Apify charges our prices", () => {
+    const s = settings;
+    const texts = [...doors(s).map((d) => `${d.for} ${d.how}`), doorsSentence(s), doorsSentence(null)];
+    for (const t of texts) expect(t, t).not.toMatch(PARITY);
+    // and the Apify door still tells the caller who bills, which is the part
+    // that IS true today
+    expect(doors(s).find((d) => d.door === "apify")!.how).toContain("billed per event by Apify");
+    expect(JSON.stringify(buildManifest())).not.toMatch(PARITY);
+  });
+
+  // The prose in the two published documents, minus the comment lines that are
+  // allowed to record the decision and its date.
+  test("no published document promises it either", () => {
+    for (const [name, text] of surfaces) {
+      const prose = text
+        .split("\n")
+        .filter((l) => !/^\s*(\/\/|#|\*|\/\*)/.test(l))
+        .join("\n");
+      const m = PARITY.exec(prose);
+      expect(m?.[0], `${name}: ${m?.[0] ?? ""}`).toBeUndefined();
+    }
+  });
+
+  test("the guard catches the sentence it was written for", () => {
+    for (const planted of [
+      "the Apify Actor sells these same four operations at these same prices",
+      "One row of data has one price, whichever door",
+      "the same four operations at the same prices as the Apify Actor",
+    ]) {
+      expect(planted).toMatch(PARITY);
+    }
+  });
+});
 
 describe("openapi ↔ x402 (T219)", () => {
   test("the prices in the spec are the Worker's defaults", () => {

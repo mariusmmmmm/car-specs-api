@@ -82,11 +82,10 @@ info:
     protects the service and answers `429` above it. A request that DOES send
     a key never gets a `402` — it is answered as a key holder, valid or not.
     The MCP server offers the same four as paid tools: `search_catalogue`,
-    `filter_catalogue`, `get_specs_full` and `compare_full`. **One row of data
-    has one price, whichever door**: the Apify Actor sells these same four
-    operations at these same prices, billed by Apify. Paying per request does
-    not license harvesting: bulk access is the licensed export (Terms, A3 and
-    A5).
+    `filter_catalogue`, `get_specs_full` and `compare_full`. The Apify Actor
+    sells these same four operations, billed per event by Apify — its prices
+    are on its Store page. Paying per request does not license harvesting:
+    bulk access is the licensed export (Terms, A3 and A5).
 
     # Conventions
 

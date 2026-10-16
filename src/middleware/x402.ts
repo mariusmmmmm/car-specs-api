@@ -258,7 +258,7 @@ function routeEntry(
         status: 402,
         detail:
           `This request costs $${route.priceUsd} in USDC via x402 — the terms are in the PAYMENT-REQUIRED header. ` +
-          "Alternatively send an API key. The same operation at the same price is on the Apify Actor " +
+          "Alternatively send an API key. The same operations are also on the Apify Actor, billed per event by Apify " +
           "(https://apify.com/carsdatacom/car-specs-api); the whole database is a licensed export (https://cars-data.com/en/api). " +
           "Docs: https://cars-data.com/en/api/for-ai-agents",
       },
