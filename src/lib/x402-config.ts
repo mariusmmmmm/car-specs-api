@@ -23,7 +23,8 @@ export const DEFAULT_FACILITATOR_URL = "https://x402.org/facilitator";
  *  mainnet that needs an explicit X402_FACILITATOR_URL. */
 const TESTNETS: ReadonlySet<string> = new Set(["eip155:84532"]);
 
-// The two prices, and why they are not the $0.001 the July plan (BIZ-L2d) had.
+// The four prices, and why they are not the $0.001 the July plan (BIZ-L2d) had.
+// (Two until 2026-10-16; filter and compare joined them in T334, below.)
 //
 // Full Specs — every data module, the whole catalogue, English — is published
 // at €2,900 on https://cars-data.com/en/api. Over 103,412 variants (counted in
