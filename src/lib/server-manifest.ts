@@ -74,7 +74,7 @@ function authorizationHeaderDescription(): string {
     `Four tools reach the full ${n(CATALOGUE.variants)}-variant catalogue with no key and no account at all, ` +
     `paid per call under x402 v2 on Base (USDC): search_catalogue $${DEFAULT_SEARCH_PRICE_USD}, ` +
     `filter_catalogue $${DEFAULT_FILTER_PRICE_USD}, get_specs_full $${DEFAULT_SPECS_PRICE_USD} and ` +
-    `compare_full $${DEFAULT_COMPARE_PRICE_USD} — the same four operations at the same prices as the Apify Actor. ` +
+    `compare_full $${DEFAULT_COMPARE_PRICE_USD} — the same four operations the Apify Actor offers, billed there by Apify. ` +
     "Keys and licensed exports: https://cars-data.com/en/api/for-ai-agents"
   );
 }

@@ -124,10 +124,13 @@ There is **no free tier**. Two ways take a key; the third takes a payment.
   how many requests it makes.
 
 - **Paid** — arranged by hand, no instant checkout:
-  - the [Apify Actor](https://apify.com/carsdatacom/car-specs-api) — the API
-    over the full catalogue, metered and billed per event by Apify, at the
-    **same four prices as x402** (T334: one row of data, one price, whichever
-    door — set by hand in the Apify Console, kept there deliberately);
+  - the [Apify Actor](https://apify.com/carsdatacom/car-specs-api) — the same
+    four operations over the full catalogue, metered and billed per event by
+    Apify; its prices are set by hand in the Apify Console and published on its
+    Store page, so they are not quoted here. (The owner decided on 2026-10-16
+    that they should equal the x402 prices below — one row of data, one price,
+    whichever door. The Console refuses any price change before 2026-10-23, so
+    until then they do not, and nothing here claims they do. T335.);
   - a **licensed data export** — the modules you need as CSV and JSON, with a
     field dictionary, a per-field coverage sheet and an optional update
     subscription. Module list, prices and terms are published on

@@ -17,7 +17,7 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <your cars-data.com API key> — OPTIONAL. Without it this server answers a fixed 40-car demo (every spec, every photo, 20 languages); a demo key, issued in one click, covers the same 40 cars over REST. Four tools reach the full 103,372-variant catalogue with no key and no account at all, paid per call under x402 v2 on Base (USDC): search_catalogue $0.005, filter_catalogue $0.005, get_specs_full $0.05 and compare_full $0.1 — the same four operations at the same prices as the Apify Actor. Keys and licensed exports: https://cars-data.com/en/api/for-ai-agents",
+          "description": "Bearer <your cars-data.com API key> — OPTIONAL. Without it this server answers a fixed 40-car demo (every spec, every photo, 20 languages); a demo key, issued in one click, covers the same 40 cars over REST. Four tools reach the full 103,372-variant catalogue with no key and no account at all, paid per call under x402 v2 on Base (USDC): search_catalogue $0.005, filter_catalogue $0.005, get_specs_full $0.05 and compare_full $0.1 — the same four operations the Apify Actor offers, billed there by Apify. Keys and licensed exports: https://cars-data.com/en/api/for-ai-agents",
           "isRequired": false,
           "isSecret": true
         }
