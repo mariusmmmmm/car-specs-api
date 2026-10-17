@@ -23,15 +23,16 @@
  *  exists to prevent, recreated one database over.
  *
  *  Re-run the verifier after every prod data deploy, not after every import. */
-export const CATALOGUE_AS_OF = "2026-10-13";
+export const CATALOGUE_AS_OF = "2026-10-17";
 
 export const CATALOGUE = {
   /** Active variants in prod. */
   variants: 103_372,
-  /** Variants carrying a spec document — 103.371 of 103.372 in prod, i.e. all
-   *  but one. The "909 missing" noted earlier was a local-replica artifact:
-   *  mid-import the replica had fewer spec docs than live. */
-  variantsWithSpecs: 103_371,
+  /** Variants carrying a spec document — every active variant, since the
+   *  2026-10-15 prod migrations (T342a/T345/T346). Until then it was 103.371 of
+   *  103.372, all but one. The "909 missing" noted earlier was a local-replica
+   *  artifact: mid-import the replica had fewer spec docs than live. */
+  variantsWithSpecs: 103_372,
   /** Brands with at least one active variant — NOT the 527-row master list. */
   brands: 120,
   /** Models with at least one active variant. Added 2026-10-13 (T290): README
@@ -40,12 +41,19 @@ export const CATALOGUE = {
    *  the day it stopped being. */
   models: 1_357,
   generations: 5_428,
-  /** Spec types DEFINED in specs_catalog (all active). */
-  specTypesDefined: 224,
+  /** Spec types DEFINED in specs_catalog (all active). 224 → 234 on 2026-10-17
+   *  (T253 step 0): +6 EV keys from T342a (v2g, v2h, v2l, heat_pump,
+   *  battery_voltage, electric_motor_count), +3 derivations from T346
+   *  (weight_to_torque, weight_to_power, power_per_litre) and
+   *  transmission_gears — all live in prod since 10-15, while this file still
+   *  said 224 and the Apify listing was being aligned to a stale canon. */
+  specTypesDefined: 234,
   /** Spec types that actually appear in prod data. Published separately from
-   *  the definitions because 224 as a promise of what you GET is an overclaim —
-   *  but the honest figure is 222, not the 163 the local replica showed. */
-  specTypesPresent: 222,
+   *  the definitions because the defined count as a promise of what you GET is
+   *  an overclaim — the two defined-but-absent keys are `power_kw` and
+   *  `price_new_eur`. The honest figure was 222 on 10-13 (not the 163 the local
+   *  replica showed), and is 232 since the 10-15 migrations. */
+  specTypesPresent: 232,
   specCategories: 21,
   /** Site locales. Derived from SUPPORTED_LOCALES, never typed. */
   get locales(): number {

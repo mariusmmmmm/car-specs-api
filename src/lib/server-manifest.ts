@@ -55,9 +55,9 @@ export const MANIFEST_VERSION = "1.0.5";
  *   - x402, which no registry has ever mentioned, though two tools have been
  *     answering 402 on Base mainnet since T231.
  *
- *  "224 specs" is specTypesDefined, matching what the live get_specs tool
- *  description already tells agents. catalogue-facts.ts notes that 224 reads as
- *  an overclaim against the 222 present in prod data; the manifest follows the
+ *  "N specs" is specTypesDefined, matching what the live get_specs tool
+ *  description already tells agents. catalogue-facts.ts notes that the defined
+ *  count reads as an overclaim against the ones present in prod data; the manifest follows the
  *  live MCP surface rather than quietly disagreeing with it in a second place. */
 export function description(): string {
   return `Search, compare & filter ${n(CATALOGUE.variants)} car variants — ${CATALOGUE.specTypesDefined} specs, ${CATALOGUE.locales} languages. Free demo, no key; x402.`;
