@@ -7,7 +7,7 @@
 // resolveLocale() and was served in ENGLISH — silently, because the fallback
 // has no way to say it did not have the language asked for. The data was there
 // all along: specs_catalog_translations carried a `tr` row for every active
-// spec (224 that day; 234 on 2026-10-17), exactly as many as every other locale.
+// spec (224 that day; 232 on 2026-10-18), exactly as many as every other locale.
 export const SUPPORTED_LOCALES = [
   "en", "ro", "fr", "de", "es", "it", "sr", "hr", "pt", "pl",
   "cs", "sk", "hu", "no", "sv", "el", "bg", "da", "ar", "tr",

@@ -23,7 +23,7 @@
  *  exists to prevent, recreated one database over.
  *
  *  Re-run the verifier after every prod data deploy, not after every import. */
-export const CATALOGUE_AS_OF = "2026-10-17";
+export const CATALOGUE_AS_OF = "2026-10-18";
 
 export const CATALOGUE = {
   /** Active variants in prod. */
@@ -45,15 +45,20 @@ export const CATALOGUE = {
    *  (T253 step 0): +6 EV keys from T342a (v2g, v2h, v2l, heat_pump,
    *  battery_voltage, electric_motor_count), +3 derivations from T346
    *  (weight_to_torque, weight_to_power, power_per_litre) and
-   *  transmission_gears — all live in prod since 10-15, while this file still
-   *  said 224 and the Apify listing was being aligned to a stale canon. */
-  specTypesDefined: 234,
+   *  transmission_gears. Then 234 → 232 on 2026-10-18, when T339 retired two
+   *  parallel keys onto canonical ones (ACC into safety, headlight_type into
+   *  exterior) — measured on cars_prod the same evening, hours after a deploy
+   *  had published 234. This number moves with every migration: measure it in
+   *  the same window you publish it. */
+  specTypesDefined: 232,
   /** Spec types that actually appear in prod data. Published separately from
    *  the definitions because the defined count as a promise of what you GET is
    *  an overclaim — the two defined-but-absent keys are `power_kw` and
    *  `price_new_eur`. The honest figure was 222 on 10-13 (not the 163 the local
-   *  replica showed), and is 232 since the 10-15 migrations. */
-  specTypesPresent: 232,
+   *  replica showed), 232 after the 10-15 migrations, and 230 since T339 on
+   *  10-18. The local replica is NOT a stand-in: it read 242/240 that evening,
+   *  ten ahead of prod. */
+  specTypesPresent: 230,
   specCategories: 21,
   /** Site locales. Derived from SUPPORTED_LOCALES, never typed. */
   get locales(): number {

@@ -15,7 +15,7 @@ info:
   description: |
     Read-only, cacheable, versioned REST API over cars-data.com's multilingual
     vehicle catalogue (103,372 variants, 1,357 models, 5,428 generations,
-    234 spec types, 20 languages).
+    232 spec types, 20 languages).
 
     # Three ways in
 
@@ -448,7 +448,7 @@ paths:
     get:
       tags: [catalog]
       summary: The spec dictionary — every spec key, its label, unit and group
-      description: The 234 spec types, localized. Read this once to know what the keys in `/variants/{id}/specs` mean.
+      description: The 232 spec types, localized. Read this once to know what the keys in `/variants/{id}/specs` mean.
       operationId: listSpecDefinitions
       parameters:
         - $ref: '#/components/parameters/Locale'

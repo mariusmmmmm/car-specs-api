@@ -2,7 +2,7 @@
 
 REST API and remote MCP server over cars-data.com's multilingual vehicle-specs
 database: **103,372 vehicle variants**, **1,357 models**, **5,428 generations**,
-**234 spec types defined** (232 present in the data), in **20 languages**
+**232 spec types defined** (230 present in the data), in **20 languages**
 (including Arabic, RTL).
 
 - REST API: `https://api.cars-data.com/v1`
@@ -32,7 +32,7 @@ Tools exposed:
 | Tool | What it does |
 |---|---|
 | `search_cars` | Free-text search across 103,372 variants, 120 brands, 20 languages |
-| `get_specs` | Full localized specs for one variant — 234 spec types across 21 categories (safety, comfort/interior, engine & fuel, performance, EV/hybrid, chassis, exterior, dimensions & weights, WLTP/NEDC consumption, and more), with a confidence score and `last_synced_at` freshness timestamp |
+| `get_specs` | Full localized specs for one variant — 232 spec types across 21 categories (safety, comfort/interior, engine & fuel, performance, EV/hybrid, chassis, exterior, dimensions & weights, WLTP/NEDC consumption, and more), with a confidence score and `last_synced_at` freshness timestamp |
 | `compare_variants` | Side-by-side localized specs for 2-4 variants |
 | `list_generations` | Generations/facelifts of a model, with production years |
 | `filter_cars` | Structured filter: fuel, body, drive, power/price range, year, EV-only |
@@ -66,7 +66,7 @@ declares `variantId` as an integer.
 | `GET /models/{id}/generations` | Generations for a model |
 | `GET /generations/{id}/variants` | Variants for a generation |
 | `GET /variants`, `/variants/{id}` | Filterable variant listing / single variant |
-| `GET /variants/{id}/specs?locale=` | Full localized specs (234 types defined, 232 present; 20 languages) |
+| `GET /variants/{id}/specs?locale=` | Full localized specs (232 types defined, 230 present; 20 languages) |
 | `GET /variants/{id}/images` | Image URLs |
 | `GET /variants/{id}/prices` | Price snapshot (single point-in-time, not a history) |
 | `GET /search?q=` | Free-text search |

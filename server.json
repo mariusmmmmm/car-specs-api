@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.cars-data/car-specs-api",
   "title": "cars-data.com — Car Specs API",
-  "description": "Search, compare & filter 103,372 car variants — 234 specs, 20 languages. Free demo, no key; x402.",
+  "description": "Search, compare & filter 103,372 car variants — 232 specs, 20 languages. Free demo, no key; x402.",
   "status": "active",
   "repository": {
     "url": "https://github.com/mariusmmmmm/car-specs-api",
