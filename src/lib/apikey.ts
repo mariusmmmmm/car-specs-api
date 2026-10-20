@@ -37,6 +37,15 @@ export type KeyRecord = {
   approved?: boolean;
   approved_at?: string;
   revoked_at?: string;
+  // Why it was revoked, in the owner's words (T944). Optional and additive:
+  // the 186 records revoked on 2026-10-08 predate it and read back
+  // `undefined`, which is why no migration is needed to deploy this — a
+  // missing reason is "not recorded", never "no reason".
+  revoked_reason?: string;
+  // Set by /unrevoke, kept forever. A key that has been round-tripped is not
+  // the same object as one that was never revoked, and the listing has to be
+  // able to say so.
+  unrevoked_at?: string;
   request_id?: string;
   name?: string;
 };
@@ -67,5 +76,13 @@ export type KeyRequest = {
 // what keeps the one live free key alive (it is approved) while every
 // never-approved one stays inert — belt and braces, since all 182 of those
 // were revoked on 2026-10-08 too. Goes when LegacyPlan goes.
+//
+// T944 measured what that "belt and braces" was actually worth on 2026-10-20:
+// 192 keys, 186 revoked, 183 of them on `free`. Both halves were true — and
+// both were erased by ONE admin call, because `approve` set `approved: true`
+// AND cleared `revoked_at` in the same write. The two guards were never
+// independent. They are now: see routes/admin.ts, where `approve` refuses a
+// revoked record outright and coming back is a differently-named, confirmed
+// `unrevoke` that does not grant approval.
 export const isUsable = (r: KeyRecord): boolean =>
   !r.revoked_at && (!isLegacyPlan(r.plan) || r.approved === true);

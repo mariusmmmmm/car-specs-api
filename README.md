@@ -100,11 +100,27 @@ The issued key covers the 40-car demo set with every spec, every image and all
 
 ### Key administration (owner)
 
-`node scripts/keys-admin.mjs keys | grant <email> <demo|apify> | approve-key <prefix> | revoke-key <prefix>`
+`node scripts/keys-admin.mjs keys | grant <email> <demo|apify> | approve-key <prefix> | revoke-key <prefix> [reason] | unrevoke-key <prefix> | sweep`
 — needs the `ADMIN_TOKEN` Worker secret (also in `../.secrets/api-admin.env`).
 The `/v1/admin` surface answers 404 without that secret, and is deliberately
 absent from the published OpenAPI spec. The old `requests / approve / reject`
 review commands are gone: nothing creates a request record any more.
+
+**Revoking is one-way unless you say otherwise, by name** (T944). `approve-key`
+used to clear `revoked_at` as a side effect, so every revoked key was one
+mistyped row away from working again — measured 2026-10-20: 186 of the 192 keys
+are revoked, 183 of them on the retired `free` plan, which still resolves the
+whole catalogue. Now `approve-key` refuses a revoked key outright; coming back
+is `unrevoke-key <prefix> --confirm <prefix>`, which grants nothing, so a free
+key restored that way is still inert until it is also approved.
+
+`sweep` is the bulk path and is a **dry run unless you type `--apply`**: it
+prints the inventory, the usable keys it will never touch, every candidate
+(not revoked and not usable) and, separately, how many revoked keys a single
+command could still resurrect on the Worker that is actually deployed — probed,
+not assumed. `--apply` needs `--reason`, writes a snapshot and a self-contained
+undo script before the first write, and refuses to run at all against a Worker
+with no `unrevoke` route, because there its undo could not be exact.
 Worker secrets for the flow: `ADMIN_TOKEN`, `BREVO_API_KEY`, `NOTIFY_TO`, `NOTIFY_FROM`.
 
 ## Three ways in

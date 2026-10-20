@@ -36,6 +36,14 @@ const notFound = (c: { json: (b: unknown, s: number, h: Record<string, string>) 
   const { body, status, headers } = problem(404, "Not Found", what);
   return c.json(body, status, headers);
 };
+const refuse = (
+  c: { json: (b: unknown, s: number, h: Record<string, string>) => Response },
+  code: 400 | 409,
+  what: string,
+) => {
+  const { body, status, headers } = problem(code, code === 409 ? "Conflict" : "Bad Request", what);
+  return c.json(body, status, headers);
+};
 
 async function listValues<T>(kv: KVNamespace, prefix: string): Promise<{ name: string; value: T }[]> {
   const out: { name: string; value: T }[] = [];
@@ -135,6 +143,13 @@ admin.get("/keys", async (c) => {
     created_at: r.created_at,
     approved: r.approved === true,
     revoked: Boolean(r.revoked_at),
+    // T944: `revoked` alone could not answer "when, and why?" — so the only
+    // read surface over 186 revoked keys could not tell a temp-mail sweep
+    // from a key pulled for cause. Both are null on the records revoked
+    // before the field existed, and null means "not recorded".
+    revoked_at: r.revoked_at ?? null,
+    revoked_reason: r.revoked_reason ?? null,
+    unrevoked_at: r.unrevoked_at ?? null,
     usable: isUsable(r),
   }));
   rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -150,13 +165,79 @@ async function findKey(kv: KVNamespace, prefix: string) {
   return raw ? { name, record: JSON.parse(raw) as KeyRecord } : null;
 }
 
-admin.post("/keys/:prefix/:action{approve|revoke}", async (c) => {
+// ── revocation is a one-way door unless you say otherwise, by name ─────────
+// T944. Until this change `approve` wrote `revoked_at: undefined` alongside
+// `approved: true`, so the two independent-looking guards on a key were in
+// fact one keystroke. Measured on production 2026-10-20: 192 keys, 186 of
+// them revoked, 183 of those on the retired `free` plan — which still
+// resolves the WHOLE catalogue at 1.000/month, 200/day. A single
+// `approve-key <prefix>` typed on the wrong row restored one of them
+// instantly, with nothing to review afterwards and no record that it had
+// happened.
+//
+// Three properties replace that, and all three are asserted in
+// test/keys-revocation.test.ts:
+//   1. `approve` answers only the question it is named for. On a revoked
+//      record it REFUSES (409) and changes nothing — it never un-revokes in
+//      passing.
+//   2. Coming back is `unrevoke`: a different word, and it demands the key's
+//      own hash prefix echoed in `confirm=`. One mistyped prefix cannot do
+//      it, because the mistyped prefix would have to appear twice.
+//   3. `unrevoke` does not grant approval. A `free` key that comes back is
+//      still inert until someone also approves it — two deliberate commands
+//      naming two different things, which is the property T944 asked for.
+// Revoking is deliberately NOT symmetrical: it needs no confirmation,
+// because the direction that costs is the one that opens the catalogue.
+admin.post("/keys/:prefix/:action{approve|revoke|unrevoke}", async (c) => {
   const found = await findKey(c.env.API_KEYS, c.req.param("prefix"));
   if (!found) return notFound(c, "No single key matches that hash prefix.");
   const action = c.req.param("action");
-  const record: KeyRecord = action === "approve"
-    ? { ...found.record, approved: true, approved_at: now(), revoked_at: undefined }
-    : { ...found.record, revoked_at: now() };
+  const prefix = found.name.slice(4, 12);
+
+  let record: KeyRecord;
+  if (action === "approve") {
+    if (found.record.revoked_at) {
+      return refuse(
+        c,
+        409,
+        `Key ${prefix} was revoked on ${found.record.revoked_at}` +
+          `${found.record.revoked_reason ? ` (${found.record.revoked_reason})` : ""}. ` +
+          "`approve` no longer un-revokes — that is exactly how one mistyped command used to put a key back. " +
+          `To restore it deliberately: POST /v1/admin/keys/${prefix}/unrevoke?confirm=${prefix}, ` +
+          "then approve it separately if its plan needs approval.",
+      );
+    }
+    record = { ...found.record, approved: true, approved_at: now() };
+  } else if (action === "unrevoke") {
+    if (!found.record.revoked_at) return refuse(c, 409, `Key ${prefix} is not revoked, so there is nothing to undo.`);
+    const confirm = (c.req.query("confirm") ?? "").trim().toLowerCase();
+    if (confirm !== prefix) {
+      return refuse(
+        c,
+        400,
+        `\`confirm\` must repeat this key's own hash prefix (${prefix}) — restoring a revoked key is deliberate by design. ` +
+          `It was revoked on ${found.record.revoked_at}` +
+          `${found.record.revoked_reason ? ` (${found.record.revoked_reason})` : ""}.`,
+      );
+    }
+    // The reason goes with the revocation it explained. `unrevoked_at` stays,
+    // so the listing can still show that this key was round-tripped.
+    record = { ...found.record, revoked_at: undefined, revoked_reason: undefined, unrevoked_at: now() };
+  } else {
+    // Free text, trimmed and bounded: a closed vocabulary would have had to
+    // guess the next reason, and an unrecorded reason is what the 2026-10-08
+    // sweep already left behind on 186 records.
+    const reason = (c.req.query("reason") ?? "").trim().slice(0, 200);
+    record = { ...found.record, revoked_at: now(), revoked_reason: reason || undefined };
+  }
+
   await c.env.API_KEYS.put(found.name, JSON.stringify(record));
-  return ok(c, { key_hash_prefix: found.name.slice(4, 12), email: record.email, usable: isUsable(record) });
+  return ok(c, {
+    key_hash_prefix: prefix,
+    email: record.email,
+    usable: isUsable(record),
+    revoked_at: record.revoked_at ?? null,
+    revoked_reason: record.revoked_reason ?? null,
+    unrevoked_at: record.unrevoked_at ?? null,
+  });
 });
