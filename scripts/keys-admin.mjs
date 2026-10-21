@@ -288,6 +288,13 @@ switch (cmd) {
     console.log(r.emailed
       ? `Granted ${plan} to ${r.email}: key ${r.key_hash_prefix}… emailed.`
       : `Granted ${plan} to ${r.email}: key ${r.key_hash_prefix}…\n  EMAIL FAILED — send it yourself, it cannot be shown again:\n  ${r.api_key}`);
+    // T1034: this address already had a USABLE demo key, so it now has two.
+    // Said out loud because the index only records the newest, so nothing else
+    // would ever mention the older one again.
+    if (r.superseded_demo_key_prefix) {
+      console.log(`  NOTE: ${r.email} already had a usable demo key, ${r.superseded_demo_key_prefix}… — it is STILL ACTIVE.`);
+      console.log(`  Two demo keys on one address. Revoke the old one unless you meant both:  revoke-key ${r.superseded_demo_key_prefix}`);
+    }
     break;
   }
   case "keys": {

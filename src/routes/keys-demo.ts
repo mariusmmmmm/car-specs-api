@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type { Env } from "../types";
 import { envelope, problem } from "../lib/response";
 import { formCors } from "../middleware/form-cors";
-import { generateApiKey, sha256Hex, type KeyRecord } from "../lib/apikey";
+import { demoKeyEmailIndex, generateApiKey, sha256Hex, usableDemoKeyFor, type KeyRecord } from "../lib/apikey";
 import { ipHash } from "../lib/usage";
 import { sendEmail, ingestToInbox } from "../lib/notify";
 import { checkDomainOffline, hasMailExchanger, domainOf } from "../lib/email-domain";
@@ -80,7 +80,10 @@ export async function requestDemoKey(c: Context<{ Bindings: Env }>) {
   }
 
   const emailHash = await sha256Hex(email);
-  if (await c.env.API_KEYS.get(`demokey-email:${emailHash}`)) {
+  // USABLE, not merely indexed (T1034): a revoked key used to bar its own
+  // address for good, and the refusal below then told the holder to write in
+  // for a replacement of a key that had been killed on purpose.
+  if (await usableDemoKeyFor(c.env.API_KEYS, emailHash)) {
     return fail(c, 409, "Conflict", "A key was already issued to this address. We keep only a hash of it and cannot resend it — write to office@cars-data.com and we will replace it.");
   }
 
@@ -145,7 +148,7 @@ keysDemo.get("/verify", async (c) => {
 
   // Burn the token BEFORE minting, so a double click cannot produce two keys.
   await c.env.API_KEYS.delete(vKey);
-  if (await c.env.API_KEYS.get(`demokey-email:${emailHash}`)) {
+  if (await usableDemoKeyFor(c.env.API_KEYS, emailHash)) {
     return fail(c, 409, "Conflict", "A key already exists for this address.");
   }
 
@@ -164,7 +167,7 @@ keysDemo.get("/verify", async (c) => {
     approved_at: now,
   };
   await c.env.API_KEYS.put(`key:${keyHash}`, JSON.stringify(record));
-  await c.env.API_KEYS.put(`demokey-email:${emailHash}`, keyHash.slice(0, 8));
+  await c.env.API_KEYS.put(demoKeyEmailIndex(emailHash), keyHash.slice(0, 8));
 
   // The lead reaches the owner HERE, not at request time: an address that was
   // never confirmed is noise, and the inbox is read by a person. So what lands

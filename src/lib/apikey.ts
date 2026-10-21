@@ -86,3 +86,45 @@ export type KeyRequest = {
 // `unrevoke` that does not grant approval.
 export const isUsable = (r: KeyRecord): boolean =>
   !r.revoked_at && (!isLegacyPlan(r.plan) || r.approved === true);
+
+// ── "one demo key per address" (T111) — the index is a POINTER ───────────────
+// `demokey-email:<sha256(email)>` holds the 8-char hash prefix of the demo key
+// issued to that address. It is a denormalised index, NOT the authority: the
+// authority is the `key:` record, which already carries email, plan and
+// revoked_at.
+//
+// T1034 (2026-10-22) made that distinction load-bearing, because treating the
+// entry's mere EXISTENCE as the answer was wrong in both directions at once:
+//
+//   * `routes/admin.ts` grant never wrote it, so a demo key the owner granted
+//     did not stop that address from self-serving a second one;
+//   * nothing ever cleared it, so a revoked demo key left the address barred
+//     for good — answering a request with "a key was already issued … write to
+//     office@cars-data.com and we will replace it" when no usable key existed
+//     and the one it pointed at had been killed on purpose.
+//
+// The second one is the one that costs a person, and it is why this resolves
+// the pointer instead of trusting it: ANY stale entry — missing key, revoked
+// key — now reads as "this address is free", so the addresses barred today
+// un-bar themselves on deploy, with no migration.
+//
+// Deliberately NOT fixed by syncing the write sites: there were two of those
+// when the index was written (mint, revoke) and T944 added a third (`unrevoke`)
+// without touching it. A fourth will arrive the same way. Resolving on read
+// removes the drift surface rather than adding places to keep in step.
+export const demoKeyEmailIndex = (emailHash: string): string => `demokey-email:${emailHash}`;
+
+/** The prefix of the still-usable demo key for this address, or null — in
+ *  which case the address may be issued one. Two KV ops, both scoped: the
+ *  index lookup, then the pointed-at record. Never a full scan. */
+export async function usableDemoKeyFor(kv: KVNamespace, emailHash: string): Promise<string | null> {
+  const prefix = await kv.get(demoKeyEmailIndex(emailHash));
+  // `{8,64}`, matching routes/admin.ts findKey: the index has always stored 8
+  // chars, but a longer value must resolve rather than be rejected as junk.
+  if (!prefix || !/^[0-9a-f]{8,64}$/.test(prefix)) return null;
+  const page = await kv.list({ prefix: `key:${prefix}` });
+  if (page.keys.length !== 1) return null; // gone, or ambiguous — not a bar
+  const raw = await kv.get(page.keys[0].name);
+  if (!raw) return null;
+  return isUsable(JSON.parse(raw) as KeyRecord) ? prefix : null;
+}

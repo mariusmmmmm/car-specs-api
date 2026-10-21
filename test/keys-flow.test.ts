@@ -80,6 +80,92 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+// T1034. The "one demo key per address" rule was enforced by the mere EXISTENCE
+// of `demokey-email:<sha256(email)>` — an index written in exactly one of the
+// places that decide it. So it was wrong in both directions at once: a granted
+// demo key did not bar self-serve, and a REVOKED one barred its address for
+// good, with a 409 telling the holder to write in for a replacement of a key
+// that had been killed on purpose. The index is now a pointer and the key
+// record is the authority.
+describe("one demo key per address — the index is a pointer, not the verdict (T1034)", () => {
+  const verifyLink = () => /verify\?t=([0-9a-f]{48})/.exec(sent.at(-1)!.text)![1];
+  const clickLink = async (t: string) => {
+    const res = await app.request(`/v1/keys/demo/verify?t=${t}`, {}, env, ctx);
+    await settle();
+    return res;
+  };
+  /** Full self-serve round trip: request, click, key exists. */
+  const selfServe = async (email: string) => {
+    await request({ ...valid, email });
+    const res = await clickLink(verifyLink());
+    expect(res.status).toBe(200);
+    return (await res.json() as { data: { api_key: string } }).data;
+  };
+  const indexEntries = () => [...store.keys()].filter((k) => k.startsWith("demokey-email:"));
+  const prefixOf = async (email: string) => {
+    const res = await adminCall("/keys");
+    const rows = (await res.json() as { data: { key_hash_prefix: string; email: string }[] }).data;
+    return rows.find((r) => r.email === email)!.key_hash_prefix;
+  };
+
+  it("a REVOKED demo key stops barring its own address — the lockout is over", async () => {
+    await selfServe("revoked@carscope.de");
+    // Barred while it is usable, which is the rule working.
+    expect((await request({ ...valid, email: "revoked@carscope.de" })).status).toBe(409);
+
+    const prefix = await prefixOf("revoked@carscope.de");
+    expect((await adminCall(`/keys/${prefix}/revoke`, "POST")).status).toBe(200);
+
+    // The index entry is STILL THERE — nothing cleans it up, and that is fine
+    // now, because it is read as a pointer and the key it points at is dead.
+    expect(indexEntries()).toHaveLength(1);
+    expect((await request({ ...valid, email: "revoked@carscope.de" })).status).toBe(202);
+  });
+
+  it("a usable demo key still bars the address — the rule itself is intact", async () => {
+    await selfServe("dev@evcompare.fr");
+    const res = await request({ ...valid, email: "dev@evcompare.fr" });
+    expect(res.status).toBe(409);
+    expect((await res.json() as { detail: string }).detail).toMatch(/already issued to this address/i);
+  });
+
+  it("a GRANTED demo key bars self-serve, exactly as a self-served one does", async () => {
+    expect((await adminCall("/grant?email=granted@carscope.de&plan=demo", "POST")).status).toBe(200);
+    expect(indexEntries()).toHaveLength(1);
+    expect((await request({ ...valid, email: "granted@carscope.de" })).status).toBe(409);
+  });
+
+  it("a granted APIFY key writes no demo index and bars nothing — it is not the demo tier", async () => {
+    expect((await adminCall("/grant?email=paid@carscope.de&plan=apify", "POST")).status).toBe(200);
+    expect(indexEntries()).toHaveLength(0);
+    expect((await request({ ...valid, email: "paid@carscope.de" })).status).toBe(202);
+  });
+
+  it("granting a demo key over a usable one says so, instead of quietly making two", async () => {
+    await selfServe("twice@carscope.de");
+    const first = await prefixOf("twice@carscope.de");
+    const res = await adminCall("/grant?email=twice@carscope.de&plan=demo", "POST");
+    const { data } = await res.json() as { data: { superseded_demo_key_prefix: string | null } };
+    expect(data.superseded_demo_key_prefix).toBe(first);
+
+    // Replacing a DEAD one is the ordinary case and must stay quiet.
+    const p = await prefixOf("solo@carscope.de").catch(() => null);
+    expect(p).toBeNull();
+    await selfServe("solo@carscope.de");
+    await adminCall(`/keys/${await prefixOf("solo@carscope.de")}/revoke`, "POST");
+    const res2 = await adminCall("/grant?email=solo@carscope.de&plan=demo", "POST");
+    const body2 = await res2.json() as { data: { superseded_demo_key_prefix: string | null } };
+    expect(body2.data.superseded_demo_key_prefix).toBeNull();
+  });
+
+  it("an index pointing at a key that no longer exists is not a bar", async () => {
+    await selfServe("vanished@carscope.de");
+    for (const k of [...store.keys()].filter((k) => k.startsWith("key:"))) store.delete(k);
+    expect(indexEntries()).toHaveLength(1);
+    expect((await request({ ...valid, email: "vanished@carscope.de" })).status).toBe(202);
+  });
+});
+
 describe("key requests — one self-serve tier, auto-issued (owner, 2026-10-06)", () => {
   // There is no reviewed Free tier any more: nothing self-serve reaches the
   // full catalogue. The form still asks everything it asked for review (T90),

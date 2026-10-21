@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { envelope, problem } from "../lib/response";
-import { generateApiKey, isUsable, sha256Hex, type KeyRecord } from "../lib/apikey";
+import { demoKeyEmailIndex, generateApiKey, isUsable, sha256Hex, usableDemoKeyFor, type KeyRecord } from "../lib/apikey";
 import { TOS_VERSION } from "../lib/key-request";
 import { sendEmail } from "../lib/notify";
 
@@ -112,6 +112,24 @@ admin.post("/grant", async (c) => {
   };
   await c.env.API_KEYS.put(`key:${keyHash}`, JSON.stringify(record));
 
+  // A granted DEMO key is still one of the demo keys the "one per address"
+  // index exists to count (T1034). Until this line, grant wrote the key and
+  // not the index, so the holder could go to the public form and self-serve a
+  // second one — the index was only ever written by the self-serve path that
+  // it was guarding. `apify` is deliberately left out: the index is the demo
+  // tier's, and a paid key should not bar a demo request.
+  //
+  // `replaced` is read BEFORE the write, so the owner is told when they have
+  // just issued a second usable demo key to one address instead of replacing
+  // a dead one. grant does not refuse — it is the deliberate override path —
+  // but it does not do it silently either.
+  let replaced: string | null = null;
+  if (plan === "demo") {
+    const emailHash = await sha256Hex(email);
+    replaced = await usableDemoKeyFor(c.env.API_KEYS, emailHash);
+    await c.env.API_KEYS.put(demoKeyEmailIndex(emailHash), keyHash.slice(0, 8));
+  }
+
   const sent = await sendEmail(c.env, {
     to: email,
     replyTo: c.env.NOTIFY_TO,
@@ -123,7 +141,7 @@ admin.post("/grant", async (c) => {
       `Store it now — we keep only a hash and cannot show it again.\n\n— cars-data.com`,
   });
   // Returned to the admin caller when the email failed, and only then.
-  return ok(c, { email, plan, key_hash_prefix: keyHash.slice(0, 8), emailed: sent, api_key: sent ? undefined : rawKey });
+  return ok(c, { email, plan, key_hash_prefix: keyHash.slice(0, 8), emailed: sent, api_key: sent ? undefined : rawKey, superseded_demo_key_prefix: replaced });
 });
 
 // ── existing keys (incl. those issued before manual approval) ───────────────
