@@ -9,6 +9,7 @@
 //   blob5 = actor       (salted IP hash for MCP, or key-hash prefix for REST)
 //   double1 = 1         (one call; SUM(_sample_interval) reconstructs true count)
 import type { Env } from "../types";
+import type { ThrottleReason } from "./mcp-throttle-reason";
 
 const IP_HASH_LEN = 12; // first 12 hex chars of SHA-256(ip + salt)
 const FALLBACK_SALT = "cd-usage-v1"; // used only if the IP_HASH_SALT secret is unset
@@ -44,11 +45,19 @@ export function recordRestCall(env: Env, route: string, locale: string, plan: st
 }
 
 /** An MCP request turned away at the door. blob2 = why ("unauthorized" covers
- *  a missing, unknown, unapproved or revoked key; "quota" the key's limits). */
+ *  a missing, unknown, unapproved or revoked key; "quota" the key's limits;
+ *  "anon-rate" the per-minute ceiling on keyless demo callers). The mapping
+ *  itself lives in lib/mcp-throttle-reason.ts, where a test can reach it. */
 // "unavailable" added 2026-10-03 with the fail-closed metering: a 503 is our
 // own outage and must be countable SEPARATELY from "quota", or the throttle
 // metric reports our failures as abuse by the caller — and the first person
 // to read it would go looking for an attacker that does not exist.
-export function recordMcpThrottled(env: Env, actor: string, reason: "unauthorized" | "quota" | "unavailable"): void {
+//
+// That is precisely what then happened, because the anonymous branch never
+// passed anything but "quota" (T1132, 2026-11-03). "anon-rate" is the same
+// rule applied one step further: a keyless caller hitting a per-minute ceiling
+// is not a key over its quota, and counting them as one number is what made
+// 811 ordinary refusals read as four callers hammering the service.
+export function recordMcpThrottled(env: Env, actor: string, reason: ThrottleReason): void {
   write(env, ["mcp-throttled", reason, "-", "-", actor || "-"]);
 }

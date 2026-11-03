@@ -5,6 +5,7 @@ import { CarsDataMCP } from "./mcp";
 import { authenticate, readApiKey } from "./lib/auth-key";
 import { checkAnonDemoRate } from "./lib/quota";
 import { ipHash, recordMcpThrottled } from "./lib/usage";
+import { anonThrottleReason, keyedThrottleReason } from "./lib/mcp-throttle-reason";
 import { mcpMethodGate } from "./lib/mcp-method-gate";
 import { isDemoScope } from "./lib/mcp-source";
 import type { McpProps } from "./types";
@@ -39,7 +40,11 @@ export default {
       if (!presented) {
         const gate = await checkAnonDemoRate(env.API_KEYS, iph);
         if (!gate.ok) {
-          recordMcpThrottled(env, iph, "quota");
+          // NOT "quota": this door has no key and no quota. `gate.reason` says
+          // whether the caller hit the per-minute ceiling (429) or our counter
+          // broke (503, the next branch), and the metric has to keep them
+          // apart — see lib/mcp-throttle-reason.ts for what one label cost.
+          recordMcpThrottled(env, iph, anonThrottleReason(gate.reason));
           const { body, status, headers } = gate.reason === "rate"
             // Does NOT offer a key as the remedy. It used to ("a free key
             // raises it"), and that was wrong twice over after T165: there is
@@ -64,8 +69,7 @@ export default {
         // 503 is a metering outage on OUR side, not a throttle on theirs — it
         // must not be recorded as "quota", or the MCP throttle metric counts
         // our own failures as abuse by the caller.
-        recordMcpThrottled(env, iph,
-          auth.status === 429 ? "quota" : auth.status === 503 ? "unavailable" : "unauthorized");
+        recordMcpThrottled(env, iph, keyedThrottleReason(auth.status));
         const titles = {
           401: "Unauthorized", 403: "Forbidden",
           429: "Too Many Requests", 503: "Service Unavailable",

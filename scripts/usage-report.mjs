@@ -90,11 +90,25 @@ const n = (v) => Math.round(Number(v ?? 0)).toLocaleString("en-US");
   const [{ d } = { d: 0 }] = await q(
     `SELECT COUNT(DISTINCT blob5) AS d FROM ${DATASET} WHERE ${SINCE} AND blob1 IN ('mcp','mcp-throttled')`,
   );
-  const [{ t } = { t: 0 }] = await q(
-    `SELECT SUM(_sample_interval) AS t FROM ${DATASET} WHERE ${SINCE} AND blob1 = 'mcp-throttled'`,
+  const byReason = await q(
+    `SELECT blob2 AS reason, SUM(_sample_interval) AS n FROM ${DATASET}
+     WHERE ${SINCE} AND blob1 = 'mcp-throttled' GROUP BY reason ORDER BY n DESC`,
   );
   console.log(`\nDistinct MCP IP hashes: ${n(d)}`);
-  console.log(`Anonymous 429s (mcp-throttled): ${n(t)}`);
+  // Broken out by reason, not summed. Summed and labelled "Anonymous 429s" it
+  // was wrong three ways at once — the row set also covers keyed 401/403 and
+  // our own 503 — and on 2026-11-03 that one number sent an audit looking for
+  // four abusive callers who turned out to be ordinary traffic hitting
+  // ANON_DEMO_PER_MINUTE (T1132). What each value means: src/lib/mcp-throttle-reason.ts.
+  table("MCP refusals at the door (mcp-throttled), by reason", byReason, [
+    { label: "reason", get: (r) => r.reason || "-" },
+    { label: "refusals", get: (r) => n(r.n) },
+  ]);
+  const throttled = byReason.reduce((s2, r) => s2 + Number(r.n ?? 0), 0);
+  const ours = byReason
+    .filter((r) => r.reason === "unavailable")
+    .reduce((s2, r) => s2 + Number(r.n ?? 0), 0);
+  console.log(`Refusals total: ${n(throttled)} — of which OURS (503, metering): ${n(ours)}`);
   console.log("\nTripwires (BIZ-D7 §4): one IP > ~30% of MCP volume, or > ~50k tool-calls/day, or DB-connection pressure.");
 })().catch((e) => {
   console.error("report failed:", e.message);
