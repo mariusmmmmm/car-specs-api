@@ -338,7 +338,7 @@ export async function x402Gate(c: Context<{ Bindings: Env; Variables: Variables 
   if (!route) return next();
 
   const iph = await ipHash(c.req.header("cf-connecting-ip") ?? "unknown", c.env.IP_HASH_SALT);
-  const gate = await checkX402Rate(c.env.API_KEYS, iph);
+  const gate = await checkX402Rate(c.env, iph);
   if (!gate.ok) {
     const { body, status, headers } =
       gate.reason === "rate"

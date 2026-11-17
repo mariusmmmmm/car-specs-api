@@ -11,6 +11,9 @@ import { isDemoScope } from "./lib/mcp-source";
 import type { McpProps } from "./types";
 
 export { CarsDataMCP };
+// T1194 — clasa DO trebuie exportată din entrypoint ca runtime-ul s-o poată instanţia
+// pentru binding-ul `RATE_COUNTER`; altfel deployul trece şi fiecare cerere pică.
+export { RateCounter } from "./rate-counter";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -38,7 +41,7 @@ export default {
       // the worst of both: they think they have access and we think we stopped
       // them.
       if (!presented) {
-        const gate = await checkAnonDemoRate(env.API_KEYS, iph);
+        const gate = await checkAnonDemoRate(env, iph);
         if (!gate.ok) {
           // NOT "quota": this door has no key and no quota. `gate.reason` says
           // whether the caller hit the per-minute ceiling (429) or our counter
@@ -48,9 +51,13 @@ export default {
           const { body, status, headers } = gate.reason === "rate"
             // Does NOT offer a key as the remedy. It used to ("a free key
             // raises it"), and that was wrong twice over after T165: there is
-            // no free tier any more, and a demo key is the SAME 40-car scope
-            // at a LOWER per-minute ceiling (10 vs 20 here) — so the advice
-            // sent an agent to a form to get slower.
+            // no free tier any more, and a demo key is the SAME 40-car scope.
+            //
+            // T1194 / D-64 (D) removed the second half of the old reason: the
+            // demo key's ceiling WAS lower (10 vs 20 here), so the advice sent
+            // an agent to a form to get slower. Both doors are 60 now, so a key
+            // is no longer slower — it is simply not a remedy for THIS refusal,
+            // because the scope is identical and the limit is per IP either way.
             ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute — retry shortly. This surface covers a fixed 40-car demo set; the full catalogue is a licensed export: https://cars-data.com/en/api")
             : problem(503, "Service Unavailable", "Request metering is temporarily unavailable. Retry shortly.");
           return new Response(JSON.stringify(body), { status, headers: { ...headers, "Retry-After": "60" } });

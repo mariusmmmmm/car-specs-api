@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { fakeRateCounter } from "./fake-rate-counter";
 
 // The frozen set is not generated yet (the monthly pipeline was mid-run), so
 // these tests mock it. That is not a workaround: the set is DATA and the tier's
@@ -45,6 +46,10 @@ function env(opts: { payload?: unknown; dbShouldNeverBeTouched?: boolean } = {})
   const has = "payload" in opts ? opts.payload : PAYLOAD;
   return {
     ID_TOKEN_KEY: SECRET,
+    // T1194: uşa de rată numără pe un Durable Object, iar binding-ul NU e opţional —
+    // fail-closed înseamnă că fără contor nu servim (503, nu 402/200). Fixtura
+    // trebuie să-l aibă, altfel testul măsoară lipsa lui, nu subiectul.
+    RATE_COUNTER: fakeRateCounter(),
     API_KEYS: {
       async get(k: string) { return k.startsWith("demo:v1:") && has ? JSON.stringify(has) : null; },
       async put() {},

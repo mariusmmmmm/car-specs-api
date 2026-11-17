@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { checkAndConsume, PLAN_QUOTAS, ALL_PLAN_QUOTAS, GLOBAL_DAILY_CATALOGUE_READS } from "./quota";
+import { bind } from "../../test/fake-rate-counter";
 
 /**
  * A KV stub that can be told to break. The point of these tests is not that
@@ -41,26 +42,31 @@ describe("checkAndConsume — fail CLOSED when metering breaks (T79)", () => {
   // open door did not. Over that quota, a key was served and nothing recorded it.
   test("a failed PUT refuses the request instead of serving it unmetered", async () => {
     const { kv } = fakeKv({ failPut: true });
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.reason).toBe("metering");
   });
 
   test("a failed GET refuses too — a count we cannot read is not a count of zero", async () => {
     const { kv } = fakeKv({ failGet: true });
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.reason).toBe("metering");
   });
 
-  test("the happy path still counts, and writes all three buckets", async () => {
+  // T1194: „all three buckets" a devenit DOUĂ pe KV. Minutul s-a mutat pe Durable
+  // Object (D-64, varianta E), deci `rl:` nu se mai scrie — şi e important ca testul să
+  // AFIRME absenţa, nu doar să nu o verifice: o cheie `rl:` reapărută în KV ar însemna
+  // că minutul s-a întors tăcut pe substratul pierzător.
+  test("calea fericită numără, scrie DOUĂ găleţi pe KV, şi NICIUNA de minut", async () => {
     const { kv, puts } = fakeKv();
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok).toBe(true);
     expect(r.ok && r.used).toBe(1);
     expect(puts.filter((k) => k.startsWith("usage:")).length).toBe(1);
     expect(puts.filter((k) => k.startsWith("daily:")).length).toBe(1);
-    expect(puts.filter((k) => k.startsWith("rl:")).length).toBe(1);
+    expect(puts.filter((k) => k.startsWith("rl:")).length,
+      "minutul stă pe DO din T1194 — un `rl:` în KV ar fi o regresie de substrat").toBe(0);
   });
 });
 
@@ -71,7 +77,7 @@ describe("daily cap — how FAST a key may spend its month", () => {
   test("a key at its daily ceiling is refused, with its own reason", async () => {
     const day = new Date().toISOString().slice(0, 10);
     const { kv } = fakeKv({ seed: { [`daily:${HASH}:${day}`]: String(ALL_PLAN_QUOTAS.free.daily) } });
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.reason).toBe("daily");
   });
@@ -79,7 +85,7 @@ describe("daily cap — how FAST a key may spend its month", () => {
   test("one under the ceiling still passes", async () => {
     const day = new Date().toISOString().slice(0, 10);
     const { kv } = fakeKv({ seed: { [`daily:${HASH}:${day}`]: String(ALL_PLAN_QUOTAS.free.daily - 1) } });
-    expect((await checkAndConsume(kv, HASH, LEGACY)).ok).toBe(true);
+    expect((await checkAndConsume(bind(kv), HASH, LEGACY)).ok).toBe(true);
   });
 
   test("the daily cap cannot exceed the monthly one on any plan, legacy included", () => {
@@ -91,7 +97,7 @@ describe("daily cap — how FAST a key may spend its month", () => {
   test("the monthly cap still fires on its own", async () => {
     const month = `${new Date().getUTCFullYear()}${String(new Date().getUTCMonth() + 1).padStart(2, "0")}`;
     const { kv } = fakeKv({ seed: { [`usage:${HASH}:${month}`]: String(ALL_PLAN_QUOTAS.free.monthly) } });
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok === false && r.reason).toBe("quota");
   });
 });
@@ -105,7 +111,7 @@ describe("service-wide daily ceiling (T111 M1)", () => {
   // the only limit a new credential cannot defeat by existing.
   test("a legacy free key is refused at the ceiling even with its own quota untouched", async () => {
     const { kv } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS) } });
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.reason).toBe("global");
   });
@@ -113,14 +119,14 @@ describe("service-wide daily ceiling (T111 M1)", () => {
   test("ten FRESH legacy keys share one ceiling — three get served, seven do not", async () => {
     const { kv } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS - 3) } });
     const out = [];
-    for (let i = 0; i < 10; i++) out.push(await checkAndConsume(kv, `fresh-${i}`, LEGACY));
+    for (let i = 0; i < 10; i++) out.push(await checkAndConsume(bind(kv), `fresh-${i}`, LEGACY));
     expect(out.filter((r) => r.ok).length).toBe(3);
     expect(out.filter((r) => r.ok === false && r.reason === "global").length).toBe(7);
   });
 
   test("demo traffic is exempt — a key scoped to 40 cars cannot spend catalogue budget", async () => {
     const { kv, puts } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS + 500) } });
-    const r = await checkAndConsume(kv, HASH, "demo");
+    const r = await checkAndConsume(bind(kv), HASH, "demo");
     expect(r.ok).toBe(true);
     // and it must not top up the counter it is exempt from
     expect(puts.filter((k) => k.startsWith("global:")).length).toBe(0);
@@ -128,14 +134,14 @@ describe("service-wide daily ceiling (T111 M1)", () => {
 
   test("apify traffic is exempt — Apify meters and bills it", async () => {
     const { kv } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS + 500) } });
-    const r = await checkAndConsume(kv, HASH, "apify");
+    const r = await checkAndConsume(bind(kv), HASH, "apify");
     expect(r.ok).toBe(true);
   });
 
   test("a served legacy request increments the shared counter", async () => {
     const { kv, store } = fakeKv();
-    await checkAndConsume(kv, "key-a", LEGACY);
-    await checkAndConsume(kv, "key-b", LEGACY);
+    await checkAndConsume(bind(kv), "key-a", LEGACY);
+    await checkAndConsume(bind(kv), "key-b", LEGACY);
     expect(store.get(`global:${TODAY}`)).toBe("2");
   });
 
@@ -149,7 +155,7 @@ describe("service-wide daily ceiling (T111 M1)", () => {
         [`daily:${HASH}:${TODAY}`]: String(ALL_PLAN_QUOTAS.free.daily),
       },
     });
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok === false && r.reason).toBe("global");
   });
 
@@ -161,18 +167,39 @@ describe("service-wide daily ceiling (T111 M1)", () => {
   test("the ceiling still has a subject — the offered plans alone cannot trip it", async () => {
     const { kv } = fakeKv({ seed: { [`global:${TODAY}`]: String(GLOBAL_DAILY_CATALOGUE_READS) } });
     for (const plan of Object.keys(PLAN_QUOTAS)) {
-      const r = await checkAndConsume(kv, `k-${plan}`, plan as "demo" | "apify");
+      const r = await checkAndConsume(bind(kv), `k-${plan}`, plan as "demo" | "apify");
       expect(r.ok, `${plan} must stay exempt`).toBe(true);
     }
-    expect((await checkAndConsume(kv, HASH, LEGACY)).ok, "legacy must still be counted").toBe(false);
+    expect((await checkAndConsume(bind(kv), HASH, LEGACY)).ok, "legacy must still be counted").toBe(false);
   });
 
-  test("demo keeps a minute limit — the DB still needs protecting", async () => {
-    const minute = Math.floor(Date.now() / 60_000);
-    const { kv } = fakeKv({ seed: { [`rl:${HASH}:${minute}`]: String(PLAN_QUOTAS.demo.perMinute) } });
-    const r = await checkAndConsume(kv, HASH, "demo");
+  // T1194: plafonul de minut al cheii demo nu se mai poate SEEDA în KV — nu mai e
+  // acolo. Se duce la plafon prin apeluri reale, ceea ce probează şi că numărătoarea
+  // chiar creşte cu 1 per cerere (vechiul seed n-ar fi prins un contor care pierde).
+  // Pragul e derivat din constantă, deci 10 -> 60 nu atinge testul.
+  test("cheia demo păstrează un plafon de minut — baza tot are nevoie de apărare", async () => {
+    const { kv } = fakeKv();
+    const env = bind(kv);
+    for (let i = 0; i < PLAN_QUOTAS.demo.perMinute; i++) {
+      expect((await checkAndConsume(env, HASH, "demo")).ok, `cererea ${i + 1}`).toBe(true);
+    }
+    const r = await checkAndConsume(env, HASH, "demo");
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.reason).toBe("rate");
+  });
+
+  // T1194 — uşa cheii demo e A TREIA, şi stătea pe alt substrat decât `perMinute()`.
+  // Dacă (E) ar fi aterizat doar în `perMinute()`, asta ar fi rămas pe `get`-apoi-`put`.
+  test("şi numără ATOMIC: N cereri paralele pe aceeaşi cheie consumă exact N", async () => {
+    const { kv } = fakeKv();
+    const env = bind(kv);
+    const n = PLAN_QUOTAS.demo.perMinute;
+    const toate = await Promise.all(
+      Array.from({ length: n }, () => checkAndConsume(env, "paralel", "demo")),
+    );
+    expect(toate.filter((r) => r.ok).length).toBe(n);
+    const peste = await checkAndConsume(env, "paralel", "demo");
+    expect(peste.ok, "a (N+1)-a trebuie refuzată — altfel s-au pierdut incremente").toBe(false);
   });
 });
 
@@ -183,7 +210,7 @@ describe("a stored plan that is no longer offered", () => {
   // destructure throws, which reaches the caller as a 500 on every request.
   test("the retired free plan is still metered, on its original numbers", async () => {
     const { kv, puts } = fakeKv();
-    const r = await checkAndConsume(kv, HASH, LEGACY);
+    const r = await checkAndConsume(bind(kv), HASH, LEGACY);
     expect(r.ok).toBe(true);
     expect(r.ok && r.quota).toBe(1000);
     expect(ALL_PLAN_QUOTAS.free).toEqual({ monthly: 1000, daily: 200, perMinute: 20 });
@@ -198,7 +225,7 @@ describe("a stored plan that is no longer offered", () => {
   // A record whose plan we cannot recognise at all used to throw the same way.
   test("an unrecognised stored plan refuses instead of throwing a 500", async () => {
     const { kv, puts } = fakeKv();
-    const r = await checkAndConsume(kv, HASH, "enterprise" as never);
+    const r = await checkAndConsume(bind(kv), HASH, "enterprise" as never);
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.reason).toBe("metering");
     expect(puts.length, "and it must not count what it refused").toBe(0);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { anonThrottleReason, keyedThrottleReason } from "./mcp-throttle-reason";
-import { checkAnonDemoRate, ANON_DEMO_PER_MINUTE } from "./quota";
+import { checkAnonDemoRate, checkX402Rate, ANON_DEMO_PER_MINUTE } from "./quota";
 
 /**
  * The defect these tests exist for (T1132, 2026-11-03): src/index.ts recorded
@@ -11,54 +11,86 @@ import { checkAnonDemoRate, ANON_DEMO_PER_MINUTE } from "./quota";
  * quietly leave the other behind.
  */
 
-// Same stub as quota.test.ts, kept local on purpose: these tests are about what
-// the metric SAYS when counting cannot work, so the breaking is the fixture.
-function fakeKv(opts: { seed?: Record<string, string>; failGet?: boolean; failPut?: boolean } = {}) {
-  const store = new Map<string, string>(Object.entries(opts.seed ?? {}));
-  return {
-    async get(k: string) {
-      if (opts.failGet) throw new Error("KV get unavailable");
-      return store.get(k) ?? null;
-    },
-    async put(k: string, v: string) {
-      if (opts.failPut) throw new Error("KV put unavailable");
-      store.set(k, v);
-    },
-  } as unknown as KVNamespace;
+// T1194: uşa anonimă NU mai atinge KV deloc — numărarea stă pe un Durable Object
+// (D-64, varianta E), fiindcă `get`-apoi-`put` pe KV lăsa să treacă ~6× nominala. Deci
+// fixtura de aici nu mai poate fi un KV rupt: `failGet`/`failPut` pe KV n-ar mai produce
+// niciun eşec de numărare, iar testele ar fi ieşit VERZI fără să măsoare nimic — exact
+// clasa „garda afirmă mai mult decât măsoară". Ce se rupe acum e contorul.
+//
+// `fakeRateCounter` rulează CLASA REALĂ peste un storage în memorie, deci intenţia lui
+// T1132 — ce SPUNE metrica atunci când numărarea nu poate funcţiona — se probează pe
+// codul livrat, nu pe o imitaţie.
+import { fakeRateCounter } from "../../test/fake-rate-counter";
+
+const counter = (opts: { fail?: boolean } = {}) => ({ RATE_COUNTER: fakeRateCounter(opts) });
+
+/** Duce uşa exact la plafon, prin apeluri reale. Întoarce legătura folosită. */
+async function laPlafon(iph: string) {
+  const env = counter();
+  for (let i = 0; i < ANON_DEMO_PER_MINUTE; i++) {
+    const r = await checkAnonDemoRate(env, iph);
+    expect(r.ok, `cererea ${i + 1} trebuia servită sub plafon`).toBe(true);
+  }
+  return env;
 }
 
 const IPH = "abc123def456";
-const anonKey = () => `anon:${IPH}:${Math.floor(Date.now() / 60_000)}`;
 
 describe("the anonymous demo door records WHY, not just THAT", () => {
-  test("a metering failure on the PUT is our outage — 'unavailable', never 'quota'", async () => {
-    const gate = await checkAnonDemoRate(fakeKv({ failPut: true }), IPH);
+  test("un contor care nu răspunde e defectul NOSTRU — 'unavailable', niciodată 'quota'", async () => {
+    const gate = await checkAnonDemoRate(counter({ fail: true }), IPH);
     expect(gate.ok).toBe(false);
     if (gate.ok) return;
     expect(gate.reason).toBe("metering");
     expect(anonThrottleReason(gate.reason)).toBe("unavailable");
   });
 
-  test("a metering failure on the GET is our outage too", async () => {
-    const gate = await checkAnonDemoRate(fakeKv({ failGet: true }), IPH);
+  test("şi un contor care aruncă la a doua cerere, la fel", async () => {
+    await checkAnonDemoRate(counter(), IPH);
+    const gate = await checkAnonDemoRate(counter({ fail: true }), IPH);
     expect(gate.ok).toBe(false);
     if (gate.ok) return;
     expect(gate.reason).toBe("metering");
     expect(anonThrottleReason(gate.reason)).toBe("unavailable");
   });
 
-  test("a real per-minute hit is the caller's ceiling — 'anon-rate', not our outage", async () => {
-    const seed = { [anonKey()]: String(ANON_DEMO_PER_MINUTE) };
-    const gate = await checkAnonDemoRate(fakeKv({ seed }), IPH);
+  test("o atingere reală de plafon e limita APELANTULUI — 'anon-rate', nu defectul nostru", async () => {
+    const env = await laPlafon(IPH);
+    const gate = await checkAnonDemoRate(env, IPH);
     expect(gate.ok).toBe(false);
     if (gate.ok) return;
     expect(gate.reason).toBe("rate");
     expect(anonThrottleReason(gate.reason)).toBe("anon-rate");
   });
 
-  test("under the ceiling nothing is recorded at all", async () => {
-    const seed = { [anonKey()]: String(ANON_DEMO_PER_MINUTE - 1) };
-    expect((await checkAnonDemoRate(fakeKv({ seed }), IPH)).ok).toBe(true);
+  test("sub plafon nu se înregistrează nimic", async () => {
+    const env = counter();
+    for (let i = 0; i < ANON_DEMO_PER_MINUTE - 1; i++) await checkAnonDemoRate(env, IPH);
+    expect((await checkAnonDemoRate(env, IPH)).ok).toBe(true);
+  });
+
+  // T1194 — PROBA care dă forma livrării. Pe contorul vechi, N cereri concurente pe
+  // aceeaşi cheie mişcau contorul cu ~N/10 şi treceau toate; aici trebuie să-l mişte cu
+  // exact N, deci a (N+1)-a e refuzată. Dacă substratul redevine `get`-apoi-`put`,
+  // testul ăsta cade — e singurul care deosebeşte „plafon 60" de „plafon 60 care
+  // numără corect".
+  test("N cereri PARALELE pe aceeaşi uşă consumă exact N unităţi, nu ~N/10", async () => {
+    const env = counter();
+    const n = ANON_DEMO_PER_MINUTE;
+    const toate = await Promise.all(
+      Array.from({ length: n }, () => checkAnonDemoRate(env, "paralel")),
+    );
+    expect(toate.filter((r) => r.ok).length, "toate cele N trebuie servite").toBe(n);
+    const peste = await checkAnonDemoRate(env, "paralel");
+    expect(peste.ok, "a (N+1)-a trebuie refuzată — altfel contorul a pierdut incremente").toBe(false);
+    if (!peste.ok) expect(peste.reason).toBe("rate");
+  });
+
+  test("uşile NU împart contorul: x402 nu e atins de plafonul uşii anonime", async () => {
+    const env = counter();
+    for (let i = 0; i < ANON_DEMO_PER_MINUTE; i++) await checkAnonDemoRate(env, IPH);
+    expect((await checkAnonDemoRate(env, IPH)).ok).toBe(false);
+    expect((await checkX402Rate(env, IPH)).ok, "x402 are contorul lui").toBe(true);
   });
 
   // A keyless caller has no key, so it can have no quota. This is the label

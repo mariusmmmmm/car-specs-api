@@ -140,7 +140,26 @@ curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=cars-data" |
   figures are true only after `npm run verify:catalogue` (which reads
   `cars_prod`, not the local replica) passes.
 - The rate limits shown here and on the promo page must match
-  `src/lib/quota.ts`: **20/min** for the anonymous no-key MCP demo
-  (`ANON_DEMO_PER_MINUTE`) and **10/min** for an issued demo key
+  `src/lib/quota.ts`: **60/min** for the anonymous no-key MCP demo
+  (`ANON_DEMO_PER_MINUTE`) and **60/min** for an issued demo key
   (`PLAN_QUOTAS.demo.perMinute`). There is no free tier to quote any more
   (D-01, 2026-10-08).
+
+  Raised from 20 and 10 by **T1194** (D-64, owner 2026-11-16), together with an
+  atomic counter — the three are one delivery and the order matters. The old
+  counter was get-then-put on KV, so the *effective* limit for a concurrent
+  client was ~6x the nominal one: 60 concurrent requests in the same minute
+  moved the counter by ~6 and all passed. Correct counting alone would therefore
+  have TIGHTENED the door, on exactly the population that decides whether we
+  appear in directories, so the number went up in the same commit. `60` is also
+  what `X402_PER_MINUTE` already was — one rule on every door.
+
+  The demo key used to be **slower** than an anonymous caller (10 vs 20), i.e.
+  filling in the form bought you half the rate. That is gone.
+
+  **A second copy of this number lives in another repo** and does not move with
+  this one: `v3-main/app/auth.md/route.ts` serves "rate-limited to 20
+  requests/minute per IP" live at `/auth.md`, for agents. It needs its own
+  delivery on `cars-data.com`; until that ships, the published figure there is
+  stale. This is the `project_published_numbers_drift` class — the reason this
+  bullet says "must match" in the first place.

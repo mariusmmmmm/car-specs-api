@@ -1,4 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
+import { fakeRateCounter } from "./fake-rate-counter";
 import { sha256Hex, type KeyRecord } from "../src/lib/apikey";
 import type { Env } from "../src/types";
 
@@ -60,6 +61,10 @@ async function env(): Promise<Env> {
   store.set(`key:${await sha256Hex(RAW_KEY)}`, JSON.stringify(record));
   return {
     ID_TOKEN_KEY: SECRET,
+    // T1194: uşa de rată numără pe un Durable Object, iar binding-ul NU e opţional —
+    // fail-closed înseamnă că fără contor nu servim (503, nu 402/200). Fixtura
+    // trebuie să-l aibă, altfel testul măsoară lipsa lui, nu subiectul.
+    RATE_COUNTER: fakeRateCounter(),
     API_KEYS: {
       get: async (k: string) => (k.startsWith("demo:v1:") ? JSON.stringify(PAYLOAD) : store.get(k) ?? null),
       put: async (k: string, v: string) => void store.set(k, v),

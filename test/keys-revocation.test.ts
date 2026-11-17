@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { fakeRateCounter } from "./fake-rate-counter";
 import { Hono } from "hono";
 import { admin } from "../src/routes/admin";
 import { authenticate } from "../src/lib/auth-key";
@@ -66,7 +67,7 @@ const stored = (hash: string) => JSON.parse(store.get(`key:${hash}`)!) as KeyRec
 beforeEach(() => {
   const f = fakeKv();
   store = f.store;
-  env = { API_KEYS: f.kv, ADMIN_TOKEN: "secret-admin" } as unknown as Env;
+  env = { API_KEYS: f.kv, RATE_COUNTER: fakeRateCounter(), ADMIN_TOKEN: "secret-admin" } as unknown as Env;
 });
 
 describe("one wrong keystroke cannot restore a revoked key (T944)", () => {

@@ -1,3 +1,5 @@
+import { countAtomic, type RateBinding } from "../rate-counter";
+
 // The plans the API OFFERS. D-01 (owner, 2026-10-08): only DEMO and paid
 // exist — `free` is retired and is deliberately not a member here, so no new
 // code path can name it without reaching for LegacyPlan on purpose.
@@ -46,7 +48,10 @@ export const isLegacyPlan = (plan: string): plan is LegacyPlan => LEGACY_PLANS.h
 // tidiness, so it keeps a minute limit and generous day/month ceilings that a
 // real evaluation will never notice.
 const QUOTAS: Record<Plan, { monthly: number; daily: number; perMinute: number }> = {
-  demo: { monthly: 20_000, daily: 2_000, perMinute: 10 },
+  // T1194 / D-64 (D): 10 -> 60. Era JUMĂTATE din cât primeşte un anonim, adică
+  // formularul te făcea mai lent — `src/index.ts` comenta deja absurditatea. Acum
+  // toate trei uşile au acelaşi număr, pe acelaşi substrat atomic.
+  demo: { monthly: 20_000, daily: 2_000, perMinute: 60 },
   apify: { monthly: 100_000, daily: 10_000, perMinute: 120 },
 };
 
@@ -145,7 +150,10 @@ export type QuotaResult =
 // counting (one Durable Object per key — $0 at this volume), and until then the
 // layer that actually bounds exposure is the service-wide ceiling below plus
 // the demo allowlist, neither of which depends on counting being right.
-export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: StoredPlan): Promise<QuotaResult> {
+export type QuotaBinding = RateBinding & { API_KEYS: KVNamespace };
+
+export async function checkAndConsume(env: QuotaBinding, keyHash: string, plan: StoredPlan): Promise<QuotaResult> {
+  const kv = env.API_KEYS;
   // `plan` arrives from JSON.parse of a KV record, so the type is a promise,
   // not a guarantee. Before T166 an unrecognised value destructured undefined
   // and threw a 500; now it refuses, by the same rule as the put below — if
@@ -159,21 +167,28 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: St
   const { monthly, daily, perMinute } = limits;
   const monthlyKey = `usage:${keyHash}:${monthBucket()}`;
   const dailyKey = `daily:${keyHash}:${dayBucket()}`;
-  const minuteKey = `rl:${keyHash}:${minuteBucket()}`;
+  // T1194 / D-64 (E): minutul NU mai e o cheie KV. A TREIA uşă (cheia demo) era
+  // aplicată AICI, nu în `perMinute()`, deci un contor atomic pus doar acolo ar fi
+  // lăsat-o pe acelaşi `get`-apoi-`put` pierzător — (E) ar fi aterizat pe jumătate,
+  // cu uşa anonimă exactă şi cea cu cheie tot la ~6× nominala.
+  //
+  // CE RĂMÂNE pe KV, deliberat: lunar, zilnic şi plafonul global. Acelea pierd şi ele
+  // incremente (antetul de mai sus: ≥42,6%), dar D-64 a măsurat şi a decis uşa de
+  // MINUT — iar ce mărgineşte expunerea acolo e plafonul pe serviciu plus allowlist-ul
+  // demo, niciunul dependent de numărare exactă. Un contor atomic pe lună ar schimba
+  // plafoanele reale ale cheilor existente, ceea ce nimeni n-a cerut.
   const counted = GLOBAL_COUNTED_PLANS.has(plan);
   const globalKey = `global:${dayBucket()}`;
 
-  let monthlyUsed: number, dailyUsed: number, minuteUsed: number, globalUsed: number;
+  let monthlyUsed: number, dailyUsed: number, globalUsed: number;
   try {
-    const [m, d, r, g] = await Promise.all([
+    const [m, d, g] = await Promise.all([
       kv.get(monthlyKey),
       kv.get(dailyKey),
-      kv.get(minuteKey),
       counted ? kv.get(globalKey) : Promise.resolve(null),
     ]);
     monthlyUsed = Number(m ?? 0);
     dailyUsed = Number(d ?? 0);
-    minuteUsed = Number(r ?? 0);
     globalUsed = Number(g ?? 0);
   } catch (e) {
     // A read we cannot do is a count we do not have. Same rule as the write
@@ -194,8 +209,15 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: St
   if (dailyUsed >= daily) {
     return { ok: false, reason: "daily", used: monthlyUsed, quota: monthly };
   }
-  if (minuteUsed >= perMinute) {
-    return { ok: false, reason: "rate", used: monthlyUsed, quota: monthly };
+  // Atomic, şi ULTIMA dintre plafoane: un refuz pe lună/zi/global n-are voie să
+  // consume o unitate din fereastra de minut, fiindcă `countAtomic` incrementează
+  // când serveşte. Uşa se numeşte `demo-key`, separat de `anon` şi `x402`, ca cele
+  // trei să nu împartă contorul.
+  const min = await countAtomic(env, "demo-key", keyHash, perMinute, minuteBucket());
+  if (!min.ok) {
+    return min.reason === "metering"
+      ? { ok: false, reason: "metering", used: monthlyUsed, quota: monthly }
+      : { ok: false, reason: "rate", used: monthlyUsed, quota: monthly };
   }
 
   // FAIL CLOSED (T79, 2026-10-03). This used to swallow the error and serve
@@ -217,7 +239,6 @@ export async function checkAndConsume(kv: KVNamespace, keyHash: string, plan: St
     await Promise.all([
       kv.put(monthlyKey, String(monthlyUsed + 1), { expirationTtl: 60 * 60 * 24 * 35 }),
       kv.put(dailyKey, String(dailyUsed + 1), { expirationTtl: 60 * 60 * 36 }),
-      kv.put(minuteKey, String(minuteUsed + 1), { expirationTtl: 70 }),
       ...(counted
         ? [kv.put(globalKey, String(globalUsed + 1), { expirationTtl: 60 * 60 * 36 })]
         : []),
@@ -251,13 +272,17 @@ export const ALL_PLAN_QUOTAS = ALL_QUOTAS;
 // handles. Fails CLOSED like everything else in this file: if the counter
 // cannot be read or written, the request is refused rather than served
 // uncounted — the rule that T79 had to come back and fix.
-export const ANON_DEMO_PER_MINUTE = 20;
+// T1194 / D-64 (B): 20 -> 60, ≈20 de sesiuni de agent pe minut (un handshake MCP costă
+// 3 cereri înainte de orice muncă utilă). Ridicarea NU e o concesie: contorul devine
+// atomic în aceeaşi livrare, iar limita efectivă de dinainte era ~6× nominala, deci 60
+// exact ţine uşa la fel de largă după ce numărarea devine corectă. Vezi (E) mai jos.
+export const ANON_DEMO_PER_MINUTE = 60;
 
 export function checkAnonDemoRate(
-  kv: KVNamespace,
+  env: RateBinding,
   ipHash: string,
 ): Promise<{ ok: true } | { ok: false; reason: "rate" | "metering" }> {
-  return perMinute(kv, "anon", ipHash, ANON_DEMO_PER_MINUTE);
+  return perMinute(env, "anon", ipHash, ANON_DEMO_PER_MINUTE);
 }
 
 // ── x402, callers without a key (T216) ───────────────────────────────────────
@@ -271,32 +296,26 @@ export function checkAnonDemoRate(
 export const X402_PER_MINUTE = 60;
 
 export function checkX402Rate(
-  kv: KVNamespace,
+  env: RateBinding,
   ipHash: string,
 ): Promise<{ ok: true } | { ok: false; reason: "rate" | "metering" }> {
-  return perMinute(kv, "x402", ipHash, X402_PER_MINUTE);
+  return perMinute(env, "x402", ipHash, X402_PER_MINUTE);
 }
 
 async function perMinute(
-  kv: KVNamespace,
+  env: RateBinding,
   prefix: string,
   ipHash: string,
   limit: number,
 ): Promise<{ ok: true } | { ok: false; reason: "rate" | "metering" }> {
-  const key = `${prefix}:${ipHash}:${minuteBucket()}`;
-  let used: number;
-  try {
-    used = Number((await kv.get(key)) ?? 0);
-  } catch (e) {
-    console.error(`${prefix} rate KV get failed — refusing:`, e);
-    return { ok: false, reason: "metering" };
-  }
-  if (used >= limit) return { ok: false, reason: "rate" };
-  try {
-    await kv.put(key, String(used + 1), { expirationTtl: 70 });
-  } catch (e) {
-    console.error(`${prefix} rate KV put failed — refusing:`, e);
-    return { ok: false, reason: "metering" };
-  }
-  return { ok: true };
+  // T1194 / D-64 (E). Era `get`-apoi-`put` pe KV, deci neatomic: 60 de cereri
+  // concurente în acelaşi minut mişcau contorul cu ~6 şi treceau toate, în timp ce 20
+  // secvenţiale erau refuzate la a 21-a. Plafonul se aplica INVERS decât intenţia —
+  // pedepsea clientul politicos şi lăsa să treacă pe cel agresiv.
+  //
+  // Acum numărătoarea stă pe un Durable Object per (uşă, IP), care e single-threaded,
+  // deci read-modify-write-ul e serializat. Fail-closed se păstrează neatins: orice
+  // eroare întoarce `metering`, pe care apelanţii mapează la 503 + Retry-After.
+  const v = await countAtomic(env, prefix, ipHash, limit, minuteBucket());
+  return v.ok ? { ok: true } : { ok: false, reason: v.reason };
 }

@@ -46,7 +46,7 @@ export async function authenticate(env: Env, rawKey: string | null): Promise<Aut
         : "This API key is not active yet. If you just requested it, click the link in the email we sent.",
     };
   }
-  const q = await checkAndConsume(env.API_KEYS, keyHash, record.plan);
+  const q = await checkAndConsume(env, keyHash, record.plan);
   if (!q.ok) {
     // A metering failure is OUR fault, not the caller's, and a client library
     // should treat it differently: 503 + Retry-After means "come back", 429

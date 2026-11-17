@@ -64,9 +64,21 @@ id = "4bfd13f1489b4e1482f441f4fcf33a3f"
 name = "MCP_OBJECT"
 class_name = "CarsDataMCP"
 
+# T1194 — contorul de rată atomic (D-64, varianta E). Clasă proprie, nu metode pe
+# `CarsDataMCP`: aceea e obiectul de SESIUNE MCP al SDK-ului, iar a lega plafonul de rată
+# de el n-ar avea altă justificare decât evitarea migraţiei de mai jos.
+[[durable_objects.bindings]]
+name = "RATE_COUNTER"
+class_name = "RateCounter"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["CarsDataMCP"]
+
+# Migraţia care aduce clasa nouă. CERE un `wrangler deploy` deliberat — pasul owner-ului.
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RateCounter"]
 
 # Usage observability (BIZ-D7 §5): one custom datapoint per MCP tool call, REST
 # request and anon-429, queried via the Analytics Engine SQL API by

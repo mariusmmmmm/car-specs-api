@@ -3,6 +3,15 @@ import type { KeyRecord } from "./lib/apikey";
 export type Env = {
   HYPERDRIVE: Hyperdrive;
   API_KEYS: KVNamespace;
+  // T1194 — contorul de rată ATOMIC (src/rate-counter.ts). Un DO per (uşă, identitate),
+  // single-threaded, deci read-modify-write-ul e serializat; KV-ul de deasupra ţine în
+  // continuare lunarul, zilnicul şi plafonul global.
+  //
+  // NU e opţional, şi asta e deliberat: fail-closed înseamnă că fără contor nu servim,
+  // iar un binding opţional ar fi invitat exact ramura „dacă lipseşte, lasă să treacă"
+  // pe care T79 a venit să o scoată. `MCP_OBJECT` nu e aici fiindcă nimic nu-l atinge
+  // prin `env` — SDK-ul îl rezolvă singur în `CarsDataMCP.serve()`.
+  RATE_COUNTER: DurableObjectNamespace;
   USAGE: AnalyticsEngineDataset;
   // Secret (wrangler secret put IP_HASH_SALT); .dev.vars for local. Optional so
   // a missing secret degrades to a fixed fallback salt instead of crashing.

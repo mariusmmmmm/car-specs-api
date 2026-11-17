@@ -12,6 +12,7 @@
 //     `demo` for any authenticated key, so sourceFor() fell through to
 //     dbSource() and a demo key reached the entire catalogue.
 import { describe, test, expect, vi } from "vitest";
+import { fakeRateCounter } from "./fake-rate-counter";
 
 const FAKE_IDS = new Set(Array.from({ length: 40 }, (_, i) => 3000 + i));
 vi.mock("../src/lib/demo-set", () => ({
@@ -82,6 +83,10 @@ async function env() {
   store.set(`key:${await sha256Hex(APIFY_KEY)}`, JSON.stringify(rec("apify")));
   return {
     ID_TOKEN_KEY: SECRET,
+    // T1194: uşa de rată numără pe un Durable Object, iar binding-ul NU e opţional —
+    // fail-closed înseamnă că fără contor nu servim (503, nu 402/200). Fixtura
+    // trebuie să-l aibă, altfel testul măsoară lipsa lui, nu subiectul.
+    RATE_COUNTER: fakeRateCounter(),
     API_KEYS: {
       async get(k: string) {
         return store.get(k) ?? null;

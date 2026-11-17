@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { fakeRateCounter } from "./fake-rate-counter";
 import { Hono } from "hono";
 
 // T216 — x402 v2 on the REST surface, end to end through the REAL router.
@@ -54,6 +55,10 @@ function env(x402: Record<string, string> = {}) {
   return {
     ID_TOKEN_KEY: SECRET,
     IP_HASH_SALT: "salt",
+    // T1194: uşa de rată numără pe un Durable Object, iar binding-ul NU e opţional —
+    // fail-closed înseamnă că fără contor nu servim (503, nu 402/200). Fixtura
+    // trebuie să-l aibă, altfel testul măsoară lipsa lui, nu subiectul.
+    RATE_COUNTER: fakeRateCounter(),
     API_KEYS: {
       async get(k: string) {
         return store.get(k) ?? null;

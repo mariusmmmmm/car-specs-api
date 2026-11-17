@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fakeRateCounter } from "./fake-rate-counter";
 import { Hono } from "hono";
 import { keys } from "../src/routes/keys";
 import { keysDemo } from "../src/routes/keys-demo";
@@ -71,7 +72,7 @@ beforeEach(() => {
   sent = [];
   pending.length = 0;
   mx.answers = true;
-  env = { API_KEYS: f.kv, ADMIN_TOKEN: "secret-admin", BREVO_API_KEY: "b", NOTIFY_TO: "owner@example.com" } as unknown as Env;
+  env = { API_KEYS: f.kv, RATE_COUNTER: fakeRateCounter(), ADMIN_TOKEN: "secret-admin", BREVO_API_KEY: "b", NOTIFY_TO: "owner@example.com" } as unknown as Env;
   vi.stubGlobal("fetch", async (_u: string, init: RequestInit) => {
     const b = JSON.parse(String(init.body));
     sent.push({ to: b.to[0].email, subject: b.subject, text: b.textContent });

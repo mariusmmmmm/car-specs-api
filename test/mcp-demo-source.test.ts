@@ -101,20 +101,21 @@ describe("MCP demo source — the blob, never the database (T111 D9)", () => {
 describe("anonymous demo rate limit", () => {
   test("refuses past the ceiling and FAILS CLOSED when KV breaks", async () => {
     const { checkAnonDemoRate, ANON_DEMO_PER_MINUTE } = await import("../src/lib/quota");
-    const store = new Map<string, string>();
-    const kv = {
-      async get(k: string) { return store.get(k) ?? null; },
-      async put(k: string, val: string) { store.set(k, val); },
-    } as unknown as KVNamespace;
+    const { fakeRateCounter } = await import("./fake-rate-counter");
 
+    // T1194: uşa anonimă numără pe un Durable Object, nu pe KV (D-64, varianta E), deci
+    // stub-ul de `KVNamespace` de dinainte nu mai are ce să măsoare. Bucla rămâne
+    // derivată din constantă, deci 20 -> 60 nu atinge testul.
+    const env = { RATE_COUNTER: fakeRateCounter() };
     for (let i = 0; i < ANON_DEMO_PER_MINUTE; i++) {
-      expect((await checkAnonDemoRate(kv, "iphash")).ok).toBe(true);
+      expect((await checkAnonDemoRate(env, "iphash")).ok).toBe(true);
     }
-    const over = await checkAnonDemoRate(kv, "iphash");
+    const over = await checkAnonDemoRate(env, "iphash");
     expect(over.ok).toBe(false);
     if (!over.ok) expect(over.reason).toBe("rate");
 
-    const broken = { async get() { throw new Error("down"); }, async put() {} } as unknown as KVNamespace;
+    // FAIL CLOSED: un contor care nu răspunde nu înseamnă „serveşte nemăsurat".
+    const broken = { RATE_COUNTER: fakeRateCounter({ fail: true }) };
     const r = await checkAnonDemoRate(broken, "iphash");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("metering");
