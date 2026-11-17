@@ -109,13 +109,82 @@ npm run server:check           # REFUSES a stale or over-length manifest. Not op
 mcp-publisher publish          # reads ./server.json, prints the stored metadata on success
 ```
 A version number is spent the moment the registry accepts it and can never be
-reused, so the check comes first. Versions served so far: 1.0.0, 1.0.1, 1.0.2.
-**1.0.3 is burned deliberately** — it exists in git, with different content, and
-was never published; 1.0.4 is the next number.
-Verify it's live:
+reused, so the check comes first.
+
+**DO NOT read the next free number off a list in this file. DERIVE it.** This
+paragraph used to end "Versions served so far: 1.0.0, 1.0.1, 1.0.2 … 1.0.4 is
+the next number" — and on 2026-11-17 that sent a reader at a number the registry
+had already accepted on 2026-10-12. A hand-kept count that the thing it counts
+outgrows is the same defect `CLAUDE.md` describes twice over (`run_gate`, the
+infrastructure guards); here it costs a burned version, permanently.
+
 ```bash
-curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=cars-data" | jq .
+curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=car-specs-api" \
+  | jq -r '.servers[] | "\(.server.version) \(._meta."io.modelcontextprotocol.registry/official".status) latest=\(._meta."io.modelcontextprotocol.registry/official".isLatest)"'
 ```
+
+The next free number is one above the highest that command prints — not one
+above the highest mentioned anywhere in prose. Measured 2026-11-17:
+
+```
+1.0.0 deprecated latest=false      (statusMessage: "Superseded by 1.0.1")
+1.0.1 active     latest=false
+1.0.2 active     latest=false
+1.0.4 active     latest=true
+```
+
+So the next free number is **1.0.5**, which is what the manifest already
+declares. **1.0.3 is burned deliberately** — it exists in git, with different
+content, and was never published (see the eight-day story above).
+
+### THREE version numbers disagree, and that is the normal state
+
+Measured 2026-11-17. Do not "fix" one to match another without deciding which
+one is supposed to move:
+
+| where | value | what it means |
+|---|---|---|
+| registry, `isLatest` | **1.0.4** | what agents and the mirrors actually read |
+| `server.json` on a branch | 1.0.5 on `fix/t1196-…`, **1.0.1 on `origin/main`** | what the NEXT publish would upload |
+| `serverInfo.version`, live `/mcp` | **1.0.0** | never bumped since July; the handshake's own answer |
+
+`origin/main` being three publishes behind the registry is the trap that cost
+two sessions an hour on 2026-11-17: **the file in the repo is not what is
+published.** Only the `curl` above answers that.
+
+Verify a publish went live with the same command. To check what the LIVE server
+exposes — which is a different question from what the registry says about it:
+
+```bash
+# initialize, keep the session id, THEN list. tools/list without the header is
+# a 400 ("Mcp-Session-Id header is required"), and a parser that reads `.result`
+# off that error prints 0 tools — unread, not empty.
+SID=$(curl -s -D /dev/stderr -X POST https://api.cars-data.com/mcp \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"1"}}}' \
+  2>&1 >/dev/null | grep -i '^mcp-session-id:' | awk '{print $2}' | tr -d '\r')
+curl -s -X POST https://api.cars-data.com/mcp \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -H "mcp-session-id: $SID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  | sed -n 's/^data: //p' | jq -r '.result.tools[].name'
+```
+
+The `sed` is not decoration. `/mcp` answers this as **SSE** (`event: message` /
+`id:` / `data: {…}`), so piping the body straight into `jq` dies with
+`Invalid numeric literal at line 1, column 6` — the first version of this snippet
+did exactly that. Dropping `text/event-stream` from `accept` does not help
+either: the body then yields `.result == null` and `jq` reports
+`Cannot iterate over null`, which reads like "no tools" rather than "wrong
+framing". Both forms were run against the live endpoint on 2026-11-17; only the
+one above prints the ten names.
+
+Measured 2026-11-17: **10 tools**, including all **four** x402-paid ones
+(`search_catalogue`, `get_specs_full`, `filter_catalogue`, `compare_full`).
+The published 1.0.4 entry says "**Two** tools … `search_catalogue $0.005` and
+`get_specs_full $0.05`" — so **the registry currently UNDERDECLARES the product
+by two paid tools**, stale since T334 landed them on 2026-10-16. A republish
+corrects that; it does not disclose anything new.
 
 ### 4. Smithery + other directories
 - Most directories (Glama, PulseMCP, mcp.so) **auto-index the official registry** —
