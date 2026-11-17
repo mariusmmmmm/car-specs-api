@@ -48,18 +48,16 @@ info:
 
     ## 2. Paid
 
-    Two products, both arranged by hand — there is no instant checkout:
+    Beyond the demo there is one product, and no instant checkout:
 
       * **The Apify Actor** — the API over the full catalogue, metered and
         billed per result by Apify's own platform:
         https://apify.com/carsdatacom/car-specs-api
-      * **A licensed data export** — the modules you need, as CSV and JSON
-        with a field dictionary and a per-field coverage sheet, with an
-        optional update subscription. Priced and ordered on
-        https://cars-data.com/en/api
 
-    `GET /export` is **not** that export and never serves bulk data; it
-    answers `403` with a pointer to the licensing page.
+    A licensed data export was the second one until 2026-11-17, when the
+    owner withdrew that offer and Part B of the Terms with it. `GET /export`
+    never served bulk data and still answers `403`; bulk access is not
+    licensed at all.
 
     ## 3. Pay per request — x402, no key
 
@@ -84,8 +82,8 @@ info:
     The MCP server offers the same four as paid tools: `search_catalogue`,
     `filter_catalogue`, `get_specs_full` and `compare_full`. The Apify Actor
     sells these same four operations, billed per event by Apify — its prices
-    are on its Store page. Paying per request does not license harvesting:
-    bulk access is the licensed export (Terms, A3 and A5).
+    are on its Store page. Paying per request does not license harvesting,
+    and there is no bulk licence to buy instead (Terms, A3 and A5).
 
     # Conventions
 
@@ -742,17 +740,15 @@ paths:
   /export:
     get:
       tags: [licensing]
-      summary: Always 403 — bulk data is licensed, not served
+      summary: Always 403 — bulk data is not served
       description: |
         This endpoint exists so that asking for bulk data gets a straight
         answer instead of a `404`. It never returns data.
 
-        Exports are arranged by hand: pick the modules you need, in the
-        languages you need, optionally with an update subscription. Prices,
-        module list and coverage sheet are published on
-        https://cars-data.com/en/api — the module prices start at €190 and the
-        catalogue module (€490) is always included. Orders are invoiced; there
-        is no instant checkout.
+        Bulk access is not licensed. Until 2026-11-17 this pointed at a
+        licensed export, priced per module; the owner withdrew that offer and
+        Part B of the Terms with it. Single records are available per request
+        with x402, or through the Apify Actor.
 
         If what you want is the API over the full catalogue rather than a file,
         that is the Apify Actor: https://apify.com/carsdatacom/car-specs-api

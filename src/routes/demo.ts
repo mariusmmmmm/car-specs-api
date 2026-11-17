@@ -15,7 +15,7 @@ import { doors, doorsSentence } from "../lib/doors";
 export const demo = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 /** What a demo caller reads when it reaches the edge of the 40 cars (T334):
- *  the three doors, x402 first while it is on. x402-config is pure — reading
+ *  the doors, x402 first while it is on. x402-config is pure — reading
  *  it here opens nothing; this module still never sees a database. */
 function upgrade(env: Env): string {
   return `The demo covers 40 cars — the only self-serve tier. ${doorsSentence(readX402Config(env))}`;
@@ -78,7 +78,7 @@ demo.get("/demo", async (c) => {
         fuels: [...new Set(payload.variants.map((v) => v.fuel))].sort(),
         variants: await Promise.all(payload.variants.map((v) => row(c.env, v))),
         upgrade: upgrade(c.env),
-        // The same three doors, structured (T334): which one is for whom,
+        // The same doors, structured (T334): which one is for whom,
         // how it is paid, where it is. x402 appears only while it is on.
         next_steps: doors(readX402Config(c.env)),
       },

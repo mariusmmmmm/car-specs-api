@@ -75,6 +75,15 @@ function authorizationHeaderDescription(): string {
     `paid per call under x402 v2 on Base (USDC): search_catalogue $${DEFAULT_SEARCH_PRICE_USD}, ` +
     `filter_catalogue $${DEFAULT_FILTER_PRICE_USD}, get_specs_full $${DEFAULT_SPECS_PRICE_USD} and ` +
     `compare_full $${DEFAULT_COMPARE_PRICE_USD} — the same four operations the Apify Actor offers, billed there by Apify. ` +
+    // NU se atinge la T1196, deși fraza spune „licensed exports" iar oferta de
+    // export a fost retrasă. Motivul e mecanic, nu stilistic: `server.json` e
+    // GENERAT din acest fișier (`node scripts/build-server-json.mjs`), iar
+    // `test/server-json.test.ts` cere ca fișierul de pe disc să fie exact ce
+    // generează sursa. Deci o schimbare aici OBLIGĂ la regenerarea fișierului
+    // publicat în registrul oficial MCP — exact fișierul pe care T1196 are
+    // instrucțiune explicită să nu-l atingă, și a cărui republicare greșită a
+    // închis ușa 5 zile și a costat 281 de apelanți. Cele două sunt o singură
+    // unitate, deci merg împreună în decizia de owner (planul T1196 §4).
     "Keys and licensed exports: https://cars-data.com/en/api/for-ai-agents"
   );
 }

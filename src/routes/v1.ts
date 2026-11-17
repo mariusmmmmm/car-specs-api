@@ -62,7 +62,8 @@ v1.route("/", docs);
 // Everything below needs a key (demo or paid) and counts against quota — or,
 // on the routes lib/x402-config.ts names, an x402 payment instead (T216). There
 // is no free tier: the only self-serve key is the demo above, scoped to 40
-// cars; everything else is the Apify Actor, x402, or a licensed export.
+// cars; everything else is the Apify Actor or x402. (The licensed export was
+// the third door until T1196 withdrew Part B of the terms.)
 const protectedV1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 // x402 (T216) BEFORE the key gate: a caller with no key, on a route the
 // allowlist in lib/x402-config.ts names, may pay per request instead. Inert

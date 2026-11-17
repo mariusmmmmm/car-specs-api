@@ -12,7 +12,7 @@ export type AuthResult =
 const GET_KEY =
   "The MCP server needs no key: https://api.cars-data.com/mcp. " +
   "For REST, get a demo key in one click at https://cars-data.com/en/api/for-ai-agents — " +
-  "it covers 40 cars with every spec. The full catalogue is a licensed export: https://cars-data.com/en/api";
+  "it covers 40 cars with every spec. The full catalogue is reached per request with x402, or through the Apify Actor: https://cars-data.com/en/api/for-ai-agents";
 
 /** Pull the key from `X-Api-Key` or `Authorization: Bearer …` (Cursor,
  *  Claude Desktop, Windsurf configs). For MCP only, also `?key=` in the URL:

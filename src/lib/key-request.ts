@@ -75,8 +75,39 @@
  *  A5 below a substantial part; an export is one complete, permanent, offline,
  *  unmetered copy that A12 leaves with the buyer. Nothing operative changed,
  *  but the ENGLISH text did, so the version moves and keys issued from here on
- *  record -v8. Paired branch in v3: fix/t333-d24-licenta-publica. */
-export const TOS_VERSION = "2026-10-15-v8";
+ *  record -v8. Paired branch in v3: fix/t333-d24-licenta-publica.
+ *
+ *  2026-11-17-v9: PART B IS WITHDRAWN — the whole export contract. B1-B6, the
+ *  part heading, B3's public-display multiplier and B5's update subscription are
+ *  gone from the published terms in all twenty languages, together with the
+ *  seven cross-references to them from Part A and the shared clauses (A5, A9,
+ *  A12, A13 twice, the intro and the meta description). Owner decision of
+ *  2026-11-17, continuing D-66: T1189 had taken the offer off the PAGES, but
+ *  while Part B stayed published the contract still sold exports. The legal
+ *  opinion is NOT being waited for.
+ *
+ *  A5 is the only one with substance, and it comes out STRONGER. It used to end
+ *  "bulk access is licensed as an export under Part B" — and the comment above
+ *  DEFAULT_SPECS_PRICE_USD in x402-config.ts records that this sentence is the
+ *  only thing holding the volume cap on x402, because the code guards (M4, M9)
+ *  are not in production. The prohibition itself was always the clause's first
+ *  sentence; the reference only said where bulk could legitimately be bought.
+ *  It now says there is no bulk licence and bulk access is not offered at all,
+ *  which removes the "but I would have bought the export" answer entirely.
+ *
+ *  KEPT ON PURPOSE: the €100 cap in A10 and the indemnity in A11, the word
+ *  "export" included — they protect us and they cover past deliveries. A12 was
+ *  moved to the past tense so that protection survives without reading as an
+ *  offer.
+ *
+ *  THE 193 KEYS ALREADY ISSUED ARE NOT AFFECTED, measured not assumed:
+ *  `tos_version` is written here and shown in the admin listing, and never
+ *  compared against TOS_VERSION anywhere in this repo, so no key is re-gated or
+ *  invalidated by a bump. Each key keeps the version it accepted, which is what
+ *  the record is for. The notice the contract itself requires (A12: "reasonable
+ *  notice on this page; the version and effective date change with them") IS
+ *  this bump. Paired branch in v3: fix/t1196-retrage-partea-b. */
+export const TOS_VERSION = "2026-11-17-v9";
 
 /** "clearfly.co.uk" is a fine answer, so a missing scheme is added rather than
  *  refused. What must hold: http(s), a dotted hostname, nothing else. Returns

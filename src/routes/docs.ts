@@ -39,7 +39,7 @@ docs.get("/docs", (c) =>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>cars-data.com API reference</title>
-    <meta name="description" content="REST API for car specifications: brands, models, generations, variants and their specs, in 20 languages. Self-serve demo key over 40 cars; the full catalogue is a licensed export." />
+    <meta name="description" content="REST API for car specifications: brands, models, generations, variants and their specs, in 20 languages. Self-serve demo key over 40 cars; the full catalogue is paid per request with x402, or through the Apify Actor." />
     <link rel="canonical" href="https://api.cars-data.com/v1/docs" />
   </head>
   <body>

@@ -179,7 +179,7 @@ keysDemo.get("/verify", async (c) => {
     `Name:    ${pending.name}\nRole:    ${pending.role}\nEmail:   ${pending.email}\n` +
     `Company: ${pending.company}\nWebsite: ${pending.website}\n\n` +
     `Use case:\n${pending.use_case}\n\n` +
-    `Key covers the ${DEMO_SET_SIZE}-car demo set. Full catalogue is a licensed export.\n` +
+    `Key covers the ${DEMO_SET_SIZE}-car demo set. Full catalogue is x402 or the Apify Actor.\n` +
     `Key hash prefix: ${keyHash.slice(0, 8)}\n`;
   c.executionCtx.waitUntil(
     (async () => {

@@ -92,14 +92,18 @@ describe("demo tier — served from KV, never from Postgres (T111)", () => {
   });
 
   // T334 — the edge of the demo names the door an agent can open, first.
-  test("with x402 ON, the index and every refusal name x402 with its prices, then Apify, then the export", async () => {
+  // T1196 — there are TWO doors now. The third was the licensed export, and
+  // the owner withdrew that offer together with Part B of the Terms, so a
+  // door pointing at it would offer what no contract covers any more.
+  test("with x402 ON, the index and every refusal name x402 with its prices, then Apify", async () => {
     const on = { ...(env() as object), X402_PAY_TO: "0x1111111111111111111111111111111111111111" } as never;
     const idx = await (await call("/demo", on)).json();
-    expect(idx.data.next_steps.map((d: { door: string }) => d.door)).toEqual(["x402", "apify", "export"]);
+    expect(idx.data.next_steps.map((d: { door: string }) => d.door)).toEqual(["x402", "apify"]);
     expect(idx.data.next_steps[0].how).toContain("$0.05");
     expect(idx.data.next_steps[0].how).toContain("GET /v1/compare $0.1");
     expect(idx.data.next_steps[0].how).toContain("filter_catalogue");
-    expect(idx.data.upgrade).toMatch(/x402.*apify\.com.*licensed export/);
+    expect(idx.data.upgrade).toMatch(/x402.*apify\.com/);
+    expect(idx.data.upgrade).not.toMatch(/licensed export/i);
     const outside = await encodeId(SECRET, "variant", 5);
     const refused = await (await call(`/variants/${outside}/specs`, on)).json();
     expect(refused.detail).toContain("pay per request with x402");
@@ -108,9 +112,14 @@ describe("demo tier — served from KV, never from Postgres (T111)", () => {
 
   test("with x402 OFF, no door points at a route that would answer 401", async () => {
     const idx = await (await call("/demo")).json();
-    expect(idx.data.next_steps.map((d: { door: string }) => d.door)).toEqual(["apify", "export"]);
+    expect(idx.data.next_steps.map((d: { door: string }) => d.door)).toEqual(["apify"]);
     expect(idx.data.upgrade).not.toContain("x402");
     expect(idx.data.upgrade).toContain("apify.com/carsdatacom/car-specs-api");
+    // Cu x402 OPRIT rămâne o SINGURĂ ușă, iar fraza nu mai are ce să unească:
+    // forma veche producea „Full catalogue: ; or the Apify Actor." fiindcă a
+    // treia ușă garanta mereu cel puțin două elemente.
+    expect(idx.data.upgrade).not.toMatch(/:\s*;/);
+    expect(idx.data.upgrade).toContain("Full catalogue: the Apify Actor");
   });
 
   test("a car OUTSIDE the set is 403 with the upgrade path, not 404", async () => {
@@ -120,8 +129,11 @@ describe("demo tier — served from KV, never from Postgres (T111)", () => {
     // Asserts the upgrade PATH, not a number: the catalogue count moves with
     // every import, and a test pinned to it fails for the wrong reason.
     const { detail } = await res.json();
-    expect(detail).toMatch(/licensed export/i);
-    expect(detail).toContain("cars-data.com/en/api");
+    expect(detail).not.toMatch(/licensed export/i);
+    // `cars-data.com/en/api` stătea aici fiindcă îl purta ușa de export
+    // (EXPORT_URL). Retrasă la T1196, deci ce rămâne de probat e că refuzul
+    // numește o ușă care chiar e deschisă, cu URL-ul ei.
+    expect(detail).toContain("apify.com/carsdatacom/car-specs-api");
   });
 
   test("A GUESSED token is indistinguishable from a car outside the set", async () => {

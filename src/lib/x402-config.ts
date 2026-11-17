@@ -45,12 +45,22 @@ const TESTNETS: ReadonlySet<string> = new Set(["eip155:84532"]);
 //
 // That is not a reason to raise this price (owner, 2026-10-15: leave it at
 // $0.05 — the volumes are zero and this is the one door agents use). It is a
-// reason to know what actually stops the arbitrage: A5, which says in words
-// that bulk access is licensed as an export under Part B. The guards that
-// would stop it in CODE — M4 and the M9 coverage-ratio detector — are NOT in
-// production; T111 §10.3 dropped them when the Free tier went away. So the cap
-// here is contractual, not technical. If x402 volume ever stops being zero,
-// re-decide this before anything else.
+// reason to know what actually stops the arbitrage: A5 of the Terms, which says
+// in words that bulk access is not permitted. The guards that would stop it in
+// CODE — M4 and the M9 coverage-ratio detector — are NOT in production; T111
+// §10.3 dropped them when the Free tier went away. So the cap here is
+// contractual, not technical. If x402 volume ever stops being zero, re-decide
+// this before anything else.
+//
+// T1196 (2026-11-17) CHANGED THE COMPARISON THIS WHOLE COMMENT RESTS ON, so read
+// the numbers above as history, not as today's arithmetic. A5 used to end "bulk
+// access is licensed as an export under Part B"; the owner withdrew the export
+// offer (D-66) and then Part B itself, so there is no export price left to
+// undercut — the €2,900 and €5,800 figures above describe a product we no longer
+// sell. The cap is STRONGER for it: A5 now says bulk access is not licensed at
+// all, which removes the "I would have bought the export instead" answer rather
+// than merely pricing above it. What has NOT changed: the cap is still words,
+// not code, and x402 volume is still zero.
 //
 // Search returns only identity data (names, years, opaque ids) that the public
 // site already shows, and it is the only way a caller without a key can learn

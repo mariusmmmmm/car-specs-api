@@ -158,12 +158,16 @@ describe("tools/list — the metadata a directory scores (T286)", () => {
     expect(d).not.toMatch(/licensed export\.$/);
   });
 
-  test("the demo tools without a paid pair still name all three doors", () => {
+  // T1196 — TWO doors, not three. The third named the licensed export and
+  // carried its URL (`cars-data.com/en/api`), which is why that assertion was
+  // here; the owner withdrew the offer and Part B of the Terms with it.
+  test("the demo tools without a paid pair still name both doors", () => {
     for (const name of ["list_generations", "get_images"]) {
       const d = tools.find((t) => t.name === name)!.description!;
       expect(d).toContain("x402");
       expect(d).toContain("apify.com/carsdatacom/car-specs-api");
-      expect(d).toContain("cars-data.com/en/api");
+      // And no longer offers an export to a caller who cannot buy one anyway.
+      expect(d).not.toMatch(/licensed export/i);
     }
   });
 

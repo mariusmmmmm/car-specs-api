@@ -58,7 +58,7 @@ export default {
             // an agent to a form to get slower. Both doors are 60 now, so a key
             // is no longer slower — it is simply not a remedy for THIS refusal,
             // because the scope is identical and the limit is per IP either way.
-            ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute — retry shortly. This surface covers a fixed 40-car demo set; the full catalogue is a licensed export: https://cars-data.com/en/api")
+            ? problem(429, "Too Many Requests", "Too many anonymous demo requests from this network this minute — retry shortly. This surface covers a fixed 40-car demo set; the full catalogue is reached per request with x402, or through the Apify Actor: https://cars-data.com/en/api/for-ai-agents")
             : problem(503, "Service Unavailable", "Request metering is temporarily unavailable. Retry shortly.");
           return new Response(JSON.stringify(body), { status, headers: { ...headers, "Retry-After": "60" } });
         }

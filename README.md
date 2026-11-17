@@ -147,11 +147,6 @@ There is **no free tier**. Two ways take a key; the third takes a payment.
     that they should equal the x402 prices below — one row of data, one price,
     whichever door. The Console refuses any price change before 2026-10-23, so
     until then they do not, and nothing here claims they do. T335.);
-  - a **licensed data export** — the modules you need as CSV and JSON, with a
-    field dictionary, a per-field coverage sheet and an optional update
-    subscription. Module list, prices and terms are published on
-    <https://cars-data.com/en/api>; nothing is quoted here that is not on that
-    page.
 
 - **Pay per request, x402 (T216, T334)** — no key, no account. `GET /v1/variants/:id/specs`
   ($0.05), `GET /v1/search` ($0.005), `GET /v1/variants` ($0.005, the filter) and
