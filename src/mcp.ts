@@ -7,6 +7,7 @@ import { decodeId } from "./lib/public-id";
 import { encodeTree } from "./middleware/opaque-ids";
 import { readX402Config } from "./lib/x402-config";
 import { getDb } from "./lib/db";
+import { MANIFEST_VERSION } from "./lib/server-manifest";
 import { filterVariants, searchVariants } from "./lib/queries";
 import { localizeVariantSpecs } from "./lib/localize-variant";
 import { registerDemoTools, registerPaidTools, type ToolContext, type Tokenized } from "./mcp-tools";
@@ -32,7 +33,28 @@ import { registerDemoTools, registerPaidTools, type ToolContext, type Tokenized 
 // put /mcp outside the id gate entirely — the REST surface could have been
 // sealed and the catalogue still walkable through here.
 export class CarsDataMCP extends McpAgent<Env> {
-  server = new McpServer({ name: "cars-data-specs", version: "1.0.0" });
+  // `version` DERIVAT din manifest, nu copiat (T1200, decizia D-75 varianta B).
+  //
+  // A fost literalul "1.0.0" din iulie, nebumpat prin nivelul demo, MCP anonim,
+  // patru unelte x402 și plafoane proprii — al TREILEA număr care descria acest
+  // server, diferit de registru (1.0.5) și de `server.json` de pe orice ramură.
+  //
+  // Ce a costat: ca să se publice v1.0.5 în registru a trebuit aflat ce commit
+  // rulează, și nicio sondă nu o spunea. `serverInfo` zicea 1.0.0, checkout-ul
+  // `api/` stătea pe `deploy/api-2026-10-16` cu 224 de tipuri de spec, ramura de
+  // publicat avea 232, baza 258. Răspunsul a venit din DESCRIERILE UNELTELOR din
+  // `tools/list` — un canal care există pentru altceva. Cinci sonde pentru o
+  // întrebare pe care câmpul ăsta o răspunde în handshake.
+  //
+  // `MANIFEST_VERSION` e deja singura sursă a câmpului `version` din
+  // `server.json` (server-manifest.ts). Un IMPORT, nu o a doua constantă: dacă
+  // ar fi ieșit o valoare ținută în sincron, am fi construit exact al patrulea
+  // număr pe care decizia îl desființează — lecția `DATA_TERMS_VERSION` ↔
+  // `TOS_VERSION`, care au nevoie de o gardă TOCMAI fiindcă sunt două copii.
+  //
+  // SHA-ul build-ului NU vine aici: câmpul rămâne semver pentru clienți. El e în
+  // `meta` din `/v1/health` (D-75 punctul 2).
+  server = new McpServer({ name: "cars-data-specs", version: MANIFEST_VERSION });
 
   // One usage datapoint per tool call (BIZ-D7 §5). client = the MCP client's
   // self-reported clientInfo.name from the initialize handshake (distinguishes

@@ -35,6 +35,30 @@ export type Env = {
   // MissingIdSecret rather than minting tokens from a built-in default, which
   // would make every one of them guessable.
   ID_TOKEN_KEY?: string;
+
+  /**
+   * SHA-ul commitului din care s-a construit Worker-ul care rulează — singurul
+   * câmp care răspunde „ce rulează ACUM" (T1200, D-75 punctul 2).
+   *
+   * OPȚIONAL, și absența lui are înțeles: „build-ul nu s-a identificat".
+   * `/v1/health` OMITE cheia când lipsește — niciodată `undefined`, `null` sau
+   * șir gol, fiindcă un câmp care apare „undefined" arată ca un răspuns.
+   *
+   * Se setează pe comanda de deploy, nu în acest fișier și nu în `[vars]`:
+   *
+   *   wrangler deploy --var BUILD_SHA:$(git rev-parse --short=12 HEAD)
+   *
+   * De ce NU în `[vars]` din wrangler.toml: SHA-ul unui commit nu poate fi scris
+   * ÎN acel commit, deci orice valoare din fișier descrie un build anterior și
+   * minte exact când conteză.
+   *
+   * CAPCANA, scrisă chiar în wrangler.toml despre vars: `wrangler deploy`
+   * înlocuiește vars-urile Worker-ului cu ce e în fișier, deci un deploy FĂRĂ
+   * flagul de mai sus șterge valoarea. Atunci cheia dispare din `/v1/health` —
+   * ceea ce e corect (nu știm) și vizibil (lipsește), nu o cifră veche care s-ar
+   * da drept proaspătă.
+   */
+  BUILD_SHA?: string;
   // T216: x402 v2 for callers without a key. ALL optional and all plain vars
   // (an address and a price are not secrets). X402_PAY_TO is the switch:
   // unset, or malformed, means x402 is off — see lib/x402-config.ts.

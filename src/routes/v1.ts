@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, Variables } from "../types";
 import { getDb } from "../lib/db";
 import { envelope } from "../lib/response";
+import { buildShaMeta } from "../lib/build-info";
 import { CATALOGUE, CATALOGUE_AS_OF } from "../lib/catalogue-facts";
 import { catalog } from "./catalog";
 import { variants } from "./variants";
@@ -35,13 +36,29 @@ export const v1 = new Hono<{ Bindings: Env; Variables: Variables }>();
 // Verificarea de viață rămâne, dar atinge TABELA, nu doar conexiunea: un `SELECT 1`
 // gol trece și dacă `variants` e blocată sau coruptă — ar dovedi că socketul e
 // deschis, nu că datele se citesc.
+//
+// `build_sha` în `meta` (T1200, decizia D-75 punctul 2): singurul câmp care
+// răspunde „ce COMMIT rulează acum". Nu în `serverInfo.version` din handshake —
+// acela rămâne semver, pentru clienți.
+//
+// OMIS când lipsește, niciodată gol. Un `build_sha: null` sau `""` arată ca un
+// răspuns și e mai rău decât absența: absența SPUNE „build-ul nu s-a
+// identificat", ceea ce e adevărat când nimeni n-a trecut flagul la deploy.
+// Vezi `BUILD_SHA` în src/types.ts pentru comanda de deploy și pentru capcana
+// cu înlocuirea vars-urilor.
 v1.get("/health", async (c) => {
   const sql = getDb(c.env);
   await sql`SELECT 1 FROM variants LIMIT 1`;
   return c.json(
     envelope(
       { status: "ok", active_variants: CATALOGUE.variants },
-      { last_synced_at: new Date().toISOString(), catalogue_as_of: CATALOGUE_AS_OF },
+      {
+        last_synced_at: new Date().toISOString(),
+        catalogue_as_of: CATALOGUE_AS_OF,
+        // Regula „omis, nu gol" stă în buildShaMeta(), ca să fie probabilă fără
+        // un rig de DB — vezi src/lib/build-info.ts.
+        ...buildShaMeta(c.env),
+      },
     ),
   );
 });

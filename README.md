@@ -73,9 +73,9 @@ declares `variantId` as an integer.
 | `GET /compare?ids=` | Side-by-side specs for 2-4 variants |
 | `GET /specs/catalog` | The full spec-type catalog (categories + counts) |
 | `GET /usage` | Self-check current quota usage for your key |
-| `GET /export` | Always 403 — bulk data is licensed, not served |
+| `GET /export` | Always 403 — bulk data is not served, and bulk access is not licensed |
 | `GET /demo` | The whole 40-car demo set in one call (demo keys) |
-| `GET /health` | Liveness + active variant count — no key |
+| `GET /health` | Liveness + active variant count, plus `meta.build_sha` when the running build identified itself — no key |
 | `GET /docs`, `GET /openapi.json` | The reference and the spec — no key |
 
 ### Request a demo key
@@ -156,6 +156,37 @@ There is **no free tier**. Two ways take a key; the third takes a payment.
   mainnet since 2026-10-11 (T231)**, settled through the PayAI facilitator; the
   switch is `X402_PAY_TO` in `wrangler.toml` — remove it and those routes
   answer `401` like every other (`src/lib/x402-config.ts`).
+
+## Deploy
+
+There is no staging for this Worker: **`wrangler deploy` *is* production.** Deploy with the
+running commit's SHA attached, so `/v1/health` can answer "what is running right now":
+
+```bash
+wrangler deploy --var BUILD_SHA:$(git rev-parse --short=12 HEAD)
+```
+
+**The flag is not optional decoration, and leaving it off is silent.** `wrangler deploy`
+replaces the Worker's vars with what is written in `wrangler.toml` (see the comment above
+`[vars]` there), so a `BUILD_SHA` set by any earlier deploy is dropped by the next one.
+When it is missing, `/v1/health` **omits** `meta.build_sha` rather than publishing an empty
+one — absence honestly means "the running build did not identify itself", which is better
+than a stale SHA passing for a fresh one. The rule lives in one place,
+`src/lib/build-info.ts`, and is tested there.
+
+Why this field exists at all: on 2026-11-17, publishing v1.0.5 to the MCP registry required
+knowing which commit was live, and **five separate probes disagreed** —
+`serverInfo.version` said `1.0.0` (unbumped since July), the `api/` checkout sat on a
+month-old deploy branch whose spec-type count was lower than the branch being published,
+and the database held a higher one still. The answer finally came out of the *tool
+descriptions* in `tools/list`. One field in `/v1/health` answers it instead.
+(Owner decision D-75; the figures are in `specs/plans/T1200-*.md`, deliberately not here —
+`test/docs-catalogue-numbers.test.ts` guards this file against catalogue numbers that
+drift, and it caught this paragraph on the first run.)
+
+Related and deliberately separate: `serverInfo.version` in the MCP handshake is **semver
+for clients**, derived from `MANIFEST_VERSION` — the same constant `server.json` publishes.
+It is not the build SHA, and it is not a second copy of the version.
 
 ## Data & attribution
 
