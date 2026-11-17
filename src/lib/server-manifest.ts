@@ -75,16 +75,34 @@ function authorizationHeaderDescription(): string {
     `paid per call under x402 v2 on Base (USDC): search_catalogue $${DEFAULT_SEARCH_PRICE_USD}, ` +
     `filter_catalogue $${DEFAULT_FILTER_PRICE_USD}, get_specs_full $${DEFAULT_SPECS_PRICE_USD} and ` +
     `compare_full $${DEFAULT_COMPARE_PRICE_USD} — the same four operations the Apify Actor offers, billed there by Apify. ` +
-    // NU se atinge la T1196, deși fraza spune „licensed exports" iar oferta de
-    // export a fost retrasă. Motivul e mecanic, nu stilistic: `server.json` e
-    // GENERAT din acest fișier (`node scripts/build-server-json.mjs`), iar
-    // `test/server-json.test.ts` cere ca fișierul de pe disc să fie exact ce
-    // generează sursa. Deci o schimbare aici OBLIGĂ la regenerarea fișierului
-    // publicat în registrul oficial MCP — exact fișierul pe care T1196 are
-    // instrucțiune explicită să nu-l atingă, și a cărui republicare greșită a
-    // închis ușa 5 zile și a costat 281 de apelanți. Cele două sunt o singură
-    // unitate, deci merg împreună în decizia de owner (planul T1196 §4).
-    "Keys and licensed exports: https://cars-data.com/en/api/for-ai-agents"
+    // „Keys", nu „Keys and licensed exports" (T1196, a doua trecere).
+    //
+    // Prima trecere a lăsat fraza intactă pe un raționament care s-a dovedit
+    // greșit la REFERINȚĂ, nu la logică: `server.json` e generat din fișierul
+    // ăsta, deci a atinge linia obligă la regenerarea fișierului publicat în
+    // registrul MCP — iar T1196 avea instrucțiune să nu-l atingă. Măsurat însă
+    // față de `origin/main`, adică față de ce e PUBLICAT azi (v1.0.1), ramura
+    // asta schimbă oricum `server.json` cu 11 linii: blocul de `headers` nu
+    // există în versiunea publicată, îl introduce T1194 împreună cu `version`
+    // 1.0.5. Deci nu exista nicio variantă în care fișierul rămâne neatins —
+    // singura alegere era dacă diferența INTRODUCE oferta sau nu.
+    //
+    // „identic octet cu octet" din primul raport era adevărat față de BAZA
+    // ramurii (t1194) și fals față de ce vede registrul. Un punct de referință
+    // greșit, nu o măsurătoare greșită — exact clasa pe care proiectul o
+    // plătește cel mai des.
+    //
+    // PREȚURILE x402 DE MAI SUS RĂMÂN, deliberat: owner-ul a decis „x402 rămâne,
+    // doar paginile se curăță", iar aici prețul e termenul protocolului, citibil
+    // de mașină, pe care un agent are nevoie să-l vadă ca să decidă — nu oferta
+    // noastră. Trăiește oricum în antetul `PAYMENT-REQUIRED` al unui 402.
+    // Divergența e reală și e scrisă în livrare: pagina `for-ai-agents` NU mai
+    // listează prețurile x402 (T1189 le-a scos), `server.json` le păstrează.
+    //
+    // `version` NU se atinge aici (rămâne 1.0.5, a lui T1194) și nimic de aici
+    // nu se republică în registru: publicarea e pasul owner-ului, prin
+    // api/MCP-REGISTRY-PUBLISH.md.
+    "Keys: https://cars-data.com/en/api/for-ai-agents"
   );
 }
 
